@@ -1,0 +1,474 @@
+# Sample Git Diffs for Testing
+
+This file contains various git diff examples that can be used for testing the AI Git Commit Generator.
+
+## 1. Simple File Addition
+
+```diff
+diff --git a/src/utils/logger.ts b/src/utils/logger.ts
+new file mode 100644
+index 0000000..1234567
+--- /dev/null
++++ b/src/utils/logger.ts
+@@ -0,0 +1,15 @@
++export enum LogLevel {
++  DEBUG = 'debug',
++  INFO = 'info',
++  WARN = 'warn',
++  ERROR = 'error'
++}
++
++export function log(level: LogLevel, message: string): void {
++  const timestamp = new Date().toISOString();
++  console.log(`[${timestamp}] ${level.toUpperCase()}: ${message}`);
++}
++
++export function logError(error: Error): void {
++  log(LogLevel.ERROR, `${error.name}: ${error.message}`);
++}
+```
+
+## 2. Function Modification
+
+```diff
+diff --git a/src/services/auth.ts b/src/services/auth.ts
+index 1234567..abcdefg 100644
+--- a/src/services/auth.ts
++++ b/src/services/auth.ts
+@@ -1,8 +1,12 @@
+ import { User } from '../types/user';
+ 
+-export function validateToken(token: string): boolean {
++export function validateToken(token: string): boolean {
+   if (!token) {
+     return false;
+   }
+-  return token.length > 10;
++  
++  // Enhanced token validation
++  return token.length > 10 && 
++         token.includes('.') && 
++         !token.includes(' ');
+ }
+```
+
+## 3. React Component Update
+
+```diff
+diff --git a/src/components/UserProfile.tsx b/src/components/UserProfile.tsx
+index 1234567..abcdefg 100644
+--- a/src/components/UserProfile.tsx
++++ b/src/components/UserProfile.tsx
+@@ -1,12 +1,24 @@
+ import React from 'react';
++import { useState } from 'react';
+ 
+ interface Props {
+   user: User;
++  onEdit?: (user: User) => void;
+ }
+ 
+-export function UserProfile({ user }: Props) {
++export function UserProfile({ user, onEdit }: Props) {
++  const [isEditing, setIsEditing] = useState(false);
++
++  const handleEdit = () => {
++    setIsEditing(true);
++    onEdit?.(user);
++  };
++
+   return (
+     <div className="user-profile">
+       <h2>{user.name}</h2>
+       <p>{user.email}</p>
++      <button onClick={handleEdit} disabled={isEditing}>
++        {isEditing ? 'Editing...' : 'Edit Profile'}
++      </button>
+     </div>
+   );
+ }
+```
+
+## 4. CSS Styling Changes
+
+```diff
+diff --git a/src/styles/components.css b/src/styles/components.css
+index 1234567..abcdefg 100644
+--- a/src/styles/components.css
++++ b/src/styles/components.css
+@@ -1,10 +1,20 @@
+ .user-profile {
+   padding: 20px;
+   border: 1px solid #ccc;
+-  border-radius: 4px;
++  border-radius: 8px;
++  background-color: #f9f9f9;
++  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+ }
+ 
+ .user-profile h2 {
+   margin-top: 0;
+   color: #333;
++  font-size: 1.5em;
++}
++
++.user-profile button {
++  background-color: #007bff;
++  color: white;
++  border: none;
++  padding: 8px 16px;
++  border-radius: 4px;
++  cursor: pointer;
+ }
+```
+
+## 5. Bug Fix
+
+```diff
+diff --git a/src/utils/dateUtils.ts b/src/utils/dateUtils.ts
+index 1234567..abcdefg 100644
+--- a/src/utils/dateUtils.ts
++++ b/src/utils/dateUtils.ts
+@@ -1,6 +1,8 @@
+ export function formatDate(date: Date): string {
++  if (!date || !(date instanceof Date)) {
++    return 'Invalid date';
++  }
+   return date.toLocaleDateString('en-US', {
+     year: 'numeric',
+     month: 'long',
+-    day: 'numeric'
++    day: 'numeric'
+   });
+ }
+```
+
+## 6. File Deletion
+
+```diff
+diff --git a/src/components/DeprecatedComponent.tsx b/src/components/DeprecatedComponent.tsx
+deleted file mode 100644
+index 1234567..0000000
+--- a/src/components/DeprecatedComponent.tsx
++++ /dev/null
+@@ -1,10 +0,0 @@
+-import React from 'react';
+-
+-// This component is no longer needed
+-export function DeprecatedComponent() {
+-  return (
+-    <div>
+-      <p>This component is deprecated</p>
+-    </div>
+-  );
+-}
+```
+
+## 7. Configuration Update
+
+```diff
+diff --git a/package.json b/package.json
+index 1234567..abcdefg 100644
+--- a/package.json
++++ b/package.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "my-app",
+-  "version": "1.0.0",
++  "version": "1.1.0",
+   "description": "A sample application",
+   "main": "dist/index.js",
+   "scripts": {
+@@ -8,7 +8,8 @@
+     "build": "tsc",
+     "start": "node dist/index.js",
+     "dev": "ts-node src/index.ts",
+-    "test": "jest"
++    "test": "jest",
++    "lint": "eslint src/**/*.ts"
+   },
+   "dependencies": {
+     "express": "^4.18.0",
+```
+
+## 8. Multiple Files Update
+
+```diff
+diff --git a/src/types/user.ts b/src/types/user.ts
+index 1234567..abcdefg 100644
+--- a/src/types/user.ts
++++ b/src/types/user.ts
+@@ -1,5 +1,7 @@
+ export interface User {
+   id: string;
+   name: string;
+   email: string;
++  avatar?: string;
++  lastLogin?: Date;
+ }
+diff --git a/src/services/userService.ts b/src/services/userService.ts
+index 1234567..abcdefg 100644
+--- a/src/services/userService.ts
++++ b/src/services/userService.ts
+@@ -10,6 +10,13 @@ export class UserService {
+     return this.users.find(user => user.id === id);
+   }
+ 
++  updateLastLogin(userId: string): void {
++    const user = this.findById(userId);
++    if (user) {
++      user.lastLogin = new Date();
++    }
++  }
++
+   create(userData: Omit<User, 'id'>): User {
+     const user: User = {
+       id: Math.random().toString(36).substr(2, 9),
+```
+
+## 9. Refactoring with Extraction
+
+```diff
+diff --git a/src/components/Dashboard.tsx b/src/components/Dashboard.tsx
+index 1234567..abcdefg 100644
+--- a/src/components/Dashboard.tsx
++++ b/src/components/Dashboard.tsx
+@@ -1,20 +1,10 @@
+ import React from 'react';
++import { StatsCard } from './StatsCard';
++import { UserList } from './UserList';
+ 
+ export function Dashboard() {
+   return (
+     <div className="dashboard">
+       <h1>Dashboard</h1>
+-      <div className="stats">
+-        <div className="stat-card">
+-          <h3>Total Users</h3>
+-          <p>1,234</p>
+-        </div>
+-        <div className="stat-card">
+-          <h3>Active Sessions</h3>
+-          <p>56</p>
+-        </div>
+-      </div>
+-      <div className="user-list">
+-        <h2>Recent Users</h2>
+-        {/* User list content */}
+-      </div>
++      <StatsCard />
++      <UserList />
+     </div>
+   );
+ }
+```
+
+## 10. Binary File Changes
+
+```diff
+diff --git a/public/logo.png b/public/logo.png
+index 1234567..abcdefg 100644
+GIT binary patch
+delta 234
+zcmV<e0+7HZ0+JrqGG5@WnRbUm6VXWWrv>S@g8pHEKL7KnG5@WnRbUm6VXWWrv>S@g8pHEKL7Kn
+zcmV<e0+7HZ0+JrqGG5@WnRbUm6VXWWrv>S@g8pHEKL7KnG5@WnRbUm6VXWWrv>S@g8pHEKL7Kn
+zcmV<e0+7HZ0+JrqGG5@WnRbUm6VXWWrv>S@g8pHEKL7KnG5@WnRbUm6VXWWrv>S@g8pHEKL7Kn
+
+delta 156
+zcmV<10+7HZ0+JrqGG5@WnRbUm6VXWWrv>S@g8pHEKL7KnG5@WnRbUm6VXWWrv>S@g8pHEKL7Kn
+zcmV<10+7HZ0+JrqGG5@WnRbUm6VXWWrv>S@g8pHEKL7KnG5@WnRbUm6VXWWrv>S@g8pHEKL7Kn
+
+diff --git a/src/constants.ts b/src/constants.ts
+index 1234567..abcdefg 100644
+--- a/src/constants.ts
++++ b/src/constants.ts
+@@ -1,2 +1,3 @@
+ export const APP_NAME = 'My Application';
+ export const VERSION = '1.0.0';
++export const LOGO_PATH = '/logo.png';
+```
+
+## 11. Test File Addition
+
+```diff
+diff --git a/src/utils/dateUtils.test.ts b/src/utils/dateUtils.test.ts
+new file mode 100644
+index 0000000..1234567
+--- /dev/null
++++ b/src/utils/dateUtils.test.ts
+@@ -0,0 +1,20 @@
++import { formatDate } from './dateUtils';
++
++describe('formatDate', () => {
++  it('should format valid date correctly', () => {
++    const date = new Date('2023-12-25');
++    expect(formatDate(date)).toBe('December 25, 2023');
++  });
++
++  it('should handle invalid date', () => {
++    expect(formatDate(null as any)).toBe('Invalid date');
++    expect(formatDate(undefined as any)).toBe('Invalid date');
++    expect(formatDate('invalid' as any)).toBe('Invalid date');
++  });
++
++  it('should handle edge cases', () => {
++    const date = new Date('2023-01-01');
++    expect(formatDate(date)).toBe('January 1, 2023');
++  });
++});
+```
+
+## 12. Documentation Update
+
+```diff
+diff --git a/README.md b/README.md
+index 1234567..abcdefg 100644
+--- a/README.md
++++ b/README.md
+@@ -1,6 +1,6 @@
+ # My Application
+ 
+-A simple web application built with React and TypeScript.
++A modern web application built with React and TypeScript, featuring user management and real-time updates.
+ 
+ ## Features
+ 
+@@ -8,6 +8,7 @@ A simple web application built with React and TypeScript.
+ - User authentication
+ - Dashboard with statistics
+ - Responsive design
++- Real-time notifications
+ 
+ ## Getting Started
+ 
+@@ -20,6 +21,10 @@ npm install
+ npm start
+ ```
+ 
++## Testing
++
++Run tests with: `npm test`
++
+ ## Contributing
+ 
+ Please read our contributing guidelines before submitting pull requests.
+```
+
+## 13. Database Migration
+
+```diff
+diff --git a/migrations/001_create_users_table.sql b/migrations/001_create_users_table.sql
+new file mode 100644
+index 0000000..1234567
+--- /dev/null
++++ b/migrations/001_create_users_table.sql
+@@ -0,0 +1,12 @@
++CREATE TABLE users (
++    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
++    name VARCHAR(255) NOT NULL,
++    email VARCHAR(255) UNIQUE NOT NULL,
++    password_hash VARCHAR(255) NOT NULL,
++    avatar_url VARCHAR(500),
++    last_login TIMESTAMP WITH TIME ZONE,
++    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
++    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
++);
++
++CREATE INDEX idx_users_email ON users(email);
+```
+
+## 14. Environment Configuration
+
+```diff
+diff --git a/.env.example b/.env.example
+index 1234567..abcdefg 100644
+--- a/.env.example
++++ b/.env.example
+@@ -1,3 +1,7 @@
+ # API Configuration
+ PORT=3000
+ NODE_ENV=development
++
++# Database
++DATABASE_URL=postgresql://user:password@localhost:5432/myapp
++
++# External Services
++OPENAI_API_KEY=your_api_key_here
+```
+
+## 15. Error Handling Improvement
+
+```diff
+diff --git a/src/services/api.ts b/src/services/api.ts
+index 1234567..abcdefg 100644
+--- a/src/services/api.ts
++++ b/src/services/api.ts
+@@ -1,10 +1,23 @@
+ export class ApiError extends Error {
+   constructor(
+     message: string,
+-    public statusCode: number
++    public statusCode: number,
++    public code?: string
+   ) {
+     super(message);
+     this.name = 'ApiError';
+   }
+ }
+ 
++export function handleApiError(error: unknown): ApiError {
++  if (error instanceof ApiError) {
++    return error;
++  }
++  
++  if (error instanceof Error) {
++    return new ApiError(error.message, 500, 'INTERNAL_ERROR');
++  }
++  
++  return new ApiError('Unknown error occurred', 500, 'UNKNOWN_ERROR');
++}
++
+ export async function makeRequest<T>(
+   url: string,
+   options?: RequestInit
+@@ -12,8 +25,12 @@ export async function makeRequest<T>(
+   try {
+     const response = await fetch(url, options);
+     
+     if (!response.ok) {
+-      throw new ApiError(`HTTP ${response.status}`, response.status);
++      const errorData = await response.json().catch(() => ({}));
++      throw new ApiError(
++        errorData.message || `HTTP ${response.status}`,
++        response.status,
++        errorData.code
++      );
+     }
+     
+     return await response.json();
+   } catch (error) {
+-    throw error;
++    throw handleApiError(error);
+   }
+ }
+```
+
+## Usage Instructions
+
+1. Copy any of the above diff examples
+2. Use them with the API endpoint:
+   ```bash
+   curl -X POST http://localhost:3000/api/generate-commit \
+     -H "Content-Type: application/json" \
+     -d '{"diff": "PASTE_DIFF_HERE"}'
+   ```
+3. Test different scenarios to see how the AI handles various types of changes
+4. Use these examples for automated testing and validation
+
+## Notes
+
+- All diffs are properly formatted and should pass validation
+- Examples cover common development scenarios
+- Binary patches are simplified for readability
+- Real git diffs may be longer and more complex
+- Use these as templates for creating your own test cases
