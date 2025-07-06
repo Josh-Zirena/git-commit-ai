@@ -5,38 +5,37 @@ import rateLimit from "express-rate-limit";
 import { createOpenAIService } from "./services/openai";
 import { createEnhancedOpenAIService } from "./services/enhancedOpenAI";
 import { validateGitDiff } from "./utils/validation";
+import { requestIdMiddleware, loggingMiddleware, logger } from "./middleware/logging";
+import { securityMiddleware } from "./middleware/security";
+import { metricsMiddleware, createMetricsRouter } from "./middleware/metrics";
+import { setupGracefulShutdown } from "./utils/graceful-shutdown";
+import healthRouter from "./routes/health";
+import { createLoggingSetup } from "./config/logging";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Request logging middleware
-const requestLogger = (req: Request, res: Response, next: NextFunction) => {
-  const timestamp = new Date().toISOString();
-  const method = req.method;
-  const url = req.url;
-  const userAgent = req.get('User-Agent') || 'unknown';
-  
-  console.log(`[${timestamp}] ${method} ${url} - User-Agent: ${userAgent}`);
-  
-  // Log response status code after response is sent
-  const originalSend = res.send;
-  res.send = function(body) {
-    console.log(`[${timestamp}] ${method} ${url} - Status: ${res.statusCode}`);
-    return originalSend.call(this, body);
-  };
-  
-  next();
-};
+// Initialize logging setup
+const loggingSetup = createLoggingSetup();
 
-// Middleware
-app.use(requestLogger);
+// Security middleware - must be first
+app.use(securityMiddleware());
+
+// Request ID and logging middleware
+app.use(requestIdMiddleware);
+app.use(loggingMiddleware);
+
+// Metrics middleware
+app.use(metricsMiddleware);
+
+// Standard middleware
 app.use(cors());
 app.use(express.json({ limit: '10mb' })); // Increased for large diff support
 
 // Rate limiting - 10 requests per minute (higher limit for testing)
 const limiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: process.env.NODE_ENV === 'test' ? 50 : 10, // Higher limit for testing
+  max: process.env.NODE_ENV === 'test' ? 1000 : 10, // Much higher limit for testing
   message: {
     error: "Too many requests from this IP, please try again later.",
     success: false
@@ -50,14 +49,9 @@ app.use("/api/", limiter);
 // Serve static files from public directory
 app.use(express.static("public"));
 
-// Health check endpoint
-app.get("/health", (req: Request, res: Response) => {
-  res.json({ 
-    status: "OK", 
-    timestamp: new Date().toISOString(),
-    version: "1.0.0"
-  });
-});
+// Routes
+app.use("/health", healthRouter);
+app.use("/metrics", createMetricsRouter());
 
 // Generate commit message endpoint
 app.post("/api/generate-commit", async (req: Request, res: Response) => {
@@ -95,7 +89,7 @@ app.post("/api/generate-commit", async (req: Request, res: Response) => {
       usage: result.usage,
     });
   } catch (error) {
-    console.error("Error generating commit message:", error);
+    req.logger.error("Error generating commit message", req.requestId, error);
 
     if (error instanceof Error) {
       // Handle specific error types
@@ -156,7 +150,7 @@ app.post("/api/generate-commit-enhanced", async (req: Request, res: Response) =>
       processingInfo: result.processingInfo,
     });
   } catch (error) {
-    console.error("Error generating commit message:", error);
+    req.logger.error("Error generating commit message (enhanced)", req.requestId, error);
 
     if (error instanceof Error) {
       // Handle specific error types
@@ -208,8 +202,9 @@ app.use((_req: Request, res: Response) => {
 });
 
 // Global error handler
-app.use((error: any, _req: Request, res: Response, _next: NextFunction) => {
-  console.error("Unhandled error:", error);
+app.use((error: any, req: Request, res: Response, _next: NextFunction) => {
+  const requestId = req.requestId || "unknown";
+  logger.error("Unhandled error", requestId, error);
   
   if (error.type === 'entity.too.large' || error.message === 'request entity too large') {
     res.status(413).json({
@@ -225,10 +220,20 @@ app.use((error: any, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`Health check available at http://localhost:${PORT}/health`);
-  console.log(`API endpoint available at http://localhost:${PORT}/api/generate-commit`);
+const server = app.listen(PORT, () => {
+  logger.info(`Server running on port ${PORT}`, "system");
+  logger.info(`Health check available at http://localhost:${PORT}/health`, "system");
+  logger.info(`Metrics available at http://localhost:${PORT}/metrics`, "system");
+  logger.info(`API endpoint available at http://localhost:${PORT}/api/generate-commit`, "system");
+});
+
+// Setup graceful shutdown
+setupGracefulShutdown(server, {
+  timeout: 30000,
+  onShutdown: async () => {
+    logger.info("Performing cleanup tasks before shutdown", "system");
+    // Add any cleanup tasks here
+  }
 });
 
 export default app;

@@ -38,9 +38,12 @@ index 1234567..abcdefg 100644
         .get('/health')
         .expect(200);
 
-      expect(response.body).toHaveProperty('status', 'OK');
+      expect(response.body).toHaveProperty('status');
+      expect(response.body).toHaveProperty('uptime');
       expect(response.body).toHaveProperty('timestamp');
-      expect(response.body).toHaveProperty('version', '1.0.0');
+      expect(response.body).toHaveProperty('version');
+      expect(response.body).toHaveProperty('dependencies');
+      expect(response.body.dependencies).toHaveProperty('openai');
     });
   });
 
@@ -311,8 +314,8 @@ index 1234567..abcdefg 100644
   });
 
   it('should handle payload too large error', async () => {
-    // Create a diff that's larger than 2MB
-    const largeDiff = 'diff --git a/large.txt b/large.txt\n' + 'x'.repeat(3 * 1024 * 1024); // 3MB
+    // Create a diff that's larger than 10MB limit
+    const largeDiff = 'diff --git a/large.txt b/large.txt\n' + 'x'.repeat(11 * 1024 * 1024); // 11MB
 
     const response = await request(app)
       .post('/api/generate-commit')
@@ -320,7 +323,7 @@ index 1234567..abcdefg 100644
       .expect(413);
 
     expect(response.body).toEqual({
-      error: 'Request payload too large',
+      error: 'Request payload too large (max 10MB). Consider using smaller diffs or the enhanced endpoint.',
       success: false
     });
   });

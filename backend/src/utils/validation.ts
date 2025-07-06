@@ -10,7 +10,7 @@ export interface GitDiffValidationOptions {
 
 const DEFAULT_OPTIONS: GitDiffValidationOptions = {
   maxSize: 10 * 1024 * 1024, // 10MB - increased for large diff handling
-  allowBinaryFiles: true, // Allow binary files for better compatibility
+  allowBinaryFiles: false, // Reject binary files by default for security
 };
 
 export function validateGitDiff(
