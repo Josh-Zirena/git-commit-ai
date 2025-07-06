@@ -1,4 +1,4 @@
-# AI Git Commit Generator
+# AI Git Commit Generator &middot; [![Node.js](https://img.shields.io/badge/Node.js-24+-339933.svg)]() [![Express](https://img.shields.io/badge/Express-5.1.0-000000.svg)]() [![React](https://img.shields.io/badge/React-19.1.0-61DAFB.svg)]() [![TypeScript](https://img.shields.io/badge/TypeScript-5.8.3-3178C6.svg)]() [![Vite](https://img.shields.io/badge/Vite-7.0.0-646CFF.svg)]() [![TailwindCSS](https://img.shields.io/badge/TailwindCSS-4.1.11-06B6D4.svg)]() [![OpenAI](https://img.shields.io/badge/OpenAI-5.8.2-412991.svg)]() [![Jest](https://img.shields.io/badge/Jest-30.0.4-C21325.svg)]()
 
 An AI-powered tool that automatically generates meaningful git commit messages based on your code changes using OpenAI's GPT models.
 
@@ -10,6 +10,8 @@ An AI-powered tool that automatically generates meaningful git commit messages b
 - **Validation**: Comprehensive git diff validation and error handling
 - **Rate Limiting**: Built-in protection against API abuse
 - **Multiple Format Support**: Handles various git diff scenarios (additions, deletions, renames, binary files)
+- **Large Diff Support**: Intelligent handling of extremely large diffs up to 10MB with chunking and summarization
+- **File Prioritization**: Smart algorithm to focus on most important changes in large codebases
 
 ## Architecture
 
@@ -20,7 +22,7 @@ An AI-powered tool that automatically generates meaningful git commit messages b
 
 ## Prerequisites
 
-- Node.js 18+ and npm
+- Node.js 24+ and npm
 - OpenAI API key
 - Git (for development)
 
@@ -117,6 +119,8 @@ npm run test:frontend
 
 **POST** `/api/generate-commit`
 
+Standard endpoint for regular-sized diffs (recommended for diffs < 100KB):
+
 ```json
 {
   "diff": "diff --git a/file.ts b/file.ts\nindex 1234567..abcdefg 100644\n--- a/file.ts\n+++ b/file.ts\n@@ -1,3 +1,6 @@\n export function example() {\n   return 'hello';\n }\n+\n+export function newFunction() {\n+  return 'world';\n+}"
@@ -133,6 +137,41 @@ npm run test:frontend
     "prompt_tokens": 150,
     "completion_tokens": 25,
     "total_tokens": 175
+  }
+}
+```
+
+### Generate Commit Message (Enhanced)
+
+**POST** `/api/generate-commit-enhanced`
+
+Enhanced endpoint for large diffs with intelligent processing (recommended for diffs > 100KB):
+
+```json
+{
+  "diff": "your-large-git-diff-here"
+}
+```
+
+**Enhanced Response:**
+```json
+{
+  "success": true,
+  "commitMessage": "feat: implement user authentication system",
+  "description": "Added comprehensive user authentication with JWT tokens, password hashing, and role-based access control across multiple components.",
+  "summary": "Large-scale authentication implementation",
+  "usage": {
+    "promptTokens": 2450,
+    "completionTokens": 85,
+    "totalTokens": 2535
+  },
+  "processingInfo": {
+    "originalSize": 2457600,
+    "processedSize": 307200,
+    "filesAnalyzed": 15,
+    "totalFiles": 47,
+    "wasTruncated": true,
+    "processingStrategy": "chunked"
   }
 }
 ```
@@ -177,7 +216,8 @@ The application handles various error scenarios:
 
 ## Performance Considerations
 
-- **Request Size**: Limited to 2MB to prevent memory issues
+- **Request Size**: Limited to 10MB with intelligent processing for large diffs
+- **Large Diff Handling**: Automatic chunking and prioritization for diffs > 100KB
 - **Rate Limiting**: Prevents API abuse and manages costs
 - **Caching**: Consider implementing caching for repeated requests
 - **Monitoring**: Use the health endpoint for uptime monitoring
@@ -197,9 +237,11 @@ The application handles various error scenarios:
 - Add tests for new features
 - Update documentation as needed
 
-## Deployment
+## Documentation
 
-See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for detailed deployment instructions.
+- **[API Documentation](docs/API.md)** - Complete API reference with examples
+- **[Deployment Guide](docs/DEPLOYMENT.md)** - AWS EC2 and Docker deployment instructions  
+- **[Large Diff Handling](docs/LARGE-DIFFS.md)** - Guide for processing extremely large git diffs
 
 ## License
 
@@ -210,6 +252,7 @@ MIT License - see the LICENSE file for details.
 For issues and questions:
 - Check the [troubleshooting guide](docs/DEPLOYMENT.md#troubleshooting)
 - Review the [API documentation](docs/API.md)
+- See [large diff handling guide](docs/LARGE-DIFFS.md) for performance optimization
 - Open an issue on GitHub
 
 ## Changelog
@@ -220,3 +263,7 @@ For issues and questions:
 - Express backend with OpenAI integration
 - Comprehensive test coverage
 - Rate limiting and error handling
+- Large diff support with intelligent chunking (up to 10MB)
+- File prioritization algorithm for optimal processing
+- Enhanced API endpoint for large codebases
+- Complete documentation and deployment guides
