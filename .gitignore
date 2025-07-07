@@ -10,3 +10,10 @@ yarn-error.log*
 *.tsbuildinfo
 .claude
 *.env
+
+# Test coverage
+coverage/
+*.lcov
+
+# Docker
+.dockerignore
