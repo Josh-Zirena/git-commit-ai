@@ -1,15 +1,38 @@
 import request from 'supertest';
 import app from '../src/index';
+import { createOpenAIService } from '../src/services/openai';
+
+// Mock the OpenAI service for E2E tests
+jest.mock('../src/services/openai');
+const mockCreateOpenAIService = createOpenAIService as jest.MockedFunction<typeof createOpenAIService>;
 
 // Add delay to avoid rate limiting in tests
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 describe('End-to-End Tests', () => {
   const API_BASE = '/api';
+  let mockOpenAIService: any;
 
-  // Add delay before each test to avoid rate limiting
   beforeEach(async () => {
-    await delay(200); // 200ms delay between tests
+    // Setup OpenAI service mock
+    mockOpenAIService = {
+      generateCommitMessage: jest.fn()
+    };
+    mockCreateOpenAIService.mockReturnValue(mockOpenAIService);
+
+    // Mock successful OpenAI response
+    mockOpenAIService.generateCommitMessage.mockResolvedValue({
+      commitMessage: 'feat: add new feature',
+      description: 'This commit adds a new feature to the application',
+      usage: {
+        promptTokens: 100,
+        completionTokens: 50,
+        totalTokens: 150
+      }
+    });
+
+    // Add delay to avoid rate limiting
+    await delay(200);
   });
 
   describe('Health Check', () => {

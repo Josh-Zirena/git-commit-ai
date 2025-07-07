@@ -10,6 +10,7 @@ import { securityMiddleware } from "./middleware/security";
 import { metricsMiddleware, createMetricsRouter } from "./middleware/metrics";
 import { setupGracefulShutdown } from "./utils/graceful-shutdown";
 import healthRouter from "./routes/health";
+import authRouter from "./routes/auth";
 import { createLoggingSetup } from "./config/logging";
 
 const app = express();
@@ -51,6 +52,7 @@ app.use(express.static("public"));
 
 // Routes
 app.use("/health", healthRouter);
+app.use("/auth", authRouter);
 app.use("/metrics", createMetricsRouter());
 
 // Generate commit message endpoint
