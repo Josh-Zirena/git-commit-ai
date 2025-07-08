@@ -7,7 +7,6 @@ interface CardProps {
   variant?: 'default' | 'glass' | 'elevated';
   hover?: boolean;
   className?: string;
-  [key: string]: any;
 }
 
 const variants = {
@@ -20,8 +19,7 @@ export function Card({
   children,
   variant = 'default',
   hover = true,
-  className,
-  ...props
+  className
 }: CardProps) {
   return (
     <motion.div
@@ -34,7 +32,6 @@ export function Card({
         variants[variant],
         className
       )}
-      {...props}
     >
       {children}
     </motion.div>

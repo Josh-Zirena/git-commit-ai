@@ -6,7 +6,11 @@ export interface CommitResponse {
   success: boolean;
   commitMessage: string;
   description: string;
-  usage?: any;
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
 }
 
 export interface ApiError {

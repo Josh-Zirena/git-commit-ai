@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Send, Copy, Check, AlertCircle, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { tomorrow, prism } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { useTheme } from './ThemeProvider';
+import { useTheme } from '../hooks/useTheme';
 import { Card } from './ui/Card';
 import { Button } from './ui/Button';
 import { LoadingSpinner } from './LoadingSpinner';
@@ -17,25 +17,25 @@ export default function CommitGenerator() {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!diff.trim() || isLoading) return;
+
+    generateCommit({ diff: diff.trim() });
+  }, [diff, isLoading, generateCommit]);
+
   // Handle keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
-        handleSubmit(e as any);
+        handleSubmit(e as unknown as React.FormEvent);
       }
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [diff]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!diff.trim() || isLoading) return;
-
-    generateCommit({ diff: diff.trim() });
-  };
+  }, [handleSubmit]);
 
   const handleCopy = () => {
     if (data?.commitMessage) {

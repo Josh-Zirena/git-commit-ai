@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
-import { useTheme } from './components/ThemeProvider';
+import { useTheme } from './hooks/useTheme';
 import Header from './components/Header';
 import CommitGenerator from './components/CommitGenerator';
 import { ThemeProvider } from './components/ThemeProvider';

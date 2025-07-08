@@ -11,7 +11,6 @@ interface ButtonProps {
   disabled?: boolean;
   onClick?: () => void;
   type?: 'button' | 'submit' | 'reset';
-  [key: string]: any;
 }
 
 const variants = {
@@ -34,7 +33,8 @@ export function Button({
   children,
   className,
   disabled,
-  ...props
+  onClick,
+  type = 'button'
 }: ButtonProps) {
   return (
     <motion.button
@@ -47,7 +47,8 @@ export function Button({
         className
       )}
       disabled={disabled || isLoading}
-      {...props}
+      onClick={onClick}
+      type={type}
     >
       {isLoading ? (
         <div className="flex items-center space-x-2">

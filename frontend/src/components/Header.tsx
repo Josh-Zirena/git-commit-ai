@@ -1,6 +1,6 @@
 import { GitBranch, Moon, Sun } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { useTheme } from './ThemeProvider';
+import { useTheme } from '../hooks/useTheme';
 
 export default function Header() {
   const { theme, setTheme } = useTheme();
