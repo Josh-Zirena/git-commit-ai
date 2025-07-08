@@ -10,16 +10,14 @@ COPY backend/package*.json ./backend/
 COPY frontend/package*.json ./frontend/
 
 # Install all dependencies (including dev dependencies for building)
+# For monorepo workspaces, install from root first
 RUN npm ci
-RUN cd backend && npm ci
-RUN cd frontend && npm ci
 
 # Copy source code
 COPY . .
 
-# Build the application
-RUN cd backend && npm run build
-RUN cd frontend && npm run build
+# Build the application using workspace commands
+RUN npm run build
 
 # Production stage
 FROM node:20-alpine AS production
@@ -35,7 +33,7 @@ WORKDIR /app
 COPY --from=builder /app/backend/package*.json ./
 
 # Install only production dependencies
-RUN npm ci --only=production && npm cache clean --force
+RUN npm ci --omit=dev && npm cache clean --force
 
 # Copy built application
 COPY --from=builder /app/backend/dist ./dist
