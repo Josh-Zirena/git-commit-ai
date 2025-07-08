@@ -111,7 +111,8 @@ jobs:
         echo $NEW_TASK_DEFINITION | jq '.'
         
         # Register new task definition
-        NEW_TASK_DEF_ARN=$(echo $NEW_TASK_DEFINITION | aws ecs register-task-definition --cli-input-json file:///dev/stdin --query 'taskDefinition.taskDefinitionArn' --output text)
+        echo $NEW_TASK_DEFINITION > /tmp/task-definition.json
+        NEW_TASK_DEF_ARN=$(aws ecs register-task-definition --cli-input-json file:///tmp/task-definition.json --query 'taskDefinition.taskDefinitionArn' --output text)
         
         # Update ECS service with new task definition
         aws ecs update-service \
