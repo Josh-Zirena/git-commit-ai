@@ -21,8 +21,10 @@ coverage/
 # Terraform
 .terraform/
 *.tfstate
-*.tfstate.backup
+*.tfstate.*
 *.tfvars
 *.tfplan
+plan.json
 terraform.tfstate.d/
 .terraform.lock.hcl
+crash.log
