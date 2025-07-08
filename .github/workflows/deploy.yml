@@ -93,7 +93,7 @@ jobs:
       run: |
         # Get current task definition
         TASK_DEFINITION=$(aws ecs describe-task-definition \
-          --task-definition $ECS_CLUSTER \
+          --task-definition $ECS_SERVICE \
           --query 'taskDefinition' \
           --output json)
         
