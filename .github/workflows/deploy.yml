@@ -97,9 +97,18 @@ jobs:
           --query 'taskDefinition' \
           --output json)
         
-        # Update image in task definition
+        # Debug: Show task definition structure
+        echo "Original task definition:"
+        echo $TASK_DEFINITION | jq '.'
+        
+        # Update image in task definition and remove read-only fields
         NEW_TASK_DEFINITION=$(echo $TASK_DEFINITION | jq --arg IMAGE "${{ steps.build-image.outputs.image }}" \
-          '.containerDefinitions[0].image = $IMAGE | del(.taskDefinitionArn) | del(.revision) | del(.status) | del(.requiresAttributes) | del(.placementConstraints) | del(.compatibilities) | del(.registeredAt) | del(.registeredBy)')
+          '.containerDefinitions[0].image = $IMAGE | 
+           del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .placementConstraints, .compatibilities, .registeredAt, .registeredBy)')
+        
+        # Debug: Show new task definition
+        echo "New task definition:"
+        echo $NEW_TASK_DEFINITION | jq '.'
         
         # Register new task definition
         NEW_TASK_DEF_ARN=$(echo $NEW_TASK_DEFINITION | aws ecs register-task-definition --cli-input-json file:///dev/stdin --query 'taskDefinition.taskDefinitionArn' --output text)
