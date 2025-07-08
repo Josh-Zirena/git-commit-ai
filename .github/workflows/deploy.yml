@@ -25,9 +25,19 @@ jobs:
     - name: Install backend dependencies (including dev tools)
       run: |
         cd backend
-        echo "Installing backend dependencies with dev tools..."
-        NODE_ENV=development npm ci
-        echo "Checking if Jest is available..."
+        echo "=== Before npm ci ==="
+        ls -la
+        echo "=== package.json exists? ==="
+        cat package.json | head -10
+        echo "=== package-lock.json exists? ==="
+        ls -la package-lock.json || echo "No package-lock.json"
+        echo "=== Installing dependencies ==="
+        NODE_ENV=development npm ci --verbose
+        echo "=== After npm ci ==="
+        ls -la
+        echo "=== node_modules directory ==="
+        ls -la node_modules/ | head -10 || echo "No node_modules"
+        echo "=== Checking if Jest is available ==="
         ls node_modules/.bin/jest || echo "Jest not found in node_modules/.bin/"
         npm list jest || echo "Jest not in npm list"
     
