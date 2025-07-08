@@ -22,7 +22,7 @@ jobs:
     - name: Install root dependencies
       run: npm ci
     
-    - name: Install backend dependencies
+    - name: Install backend dependencies (including dev tools)
       run: cd backend && npm ci --include=dev
     
     - name: Install frontend dependencies
