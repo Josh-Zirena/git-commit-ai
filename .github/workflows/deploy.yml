@@ -26,7 +26,7 @@ jobs:
       run: |
         cd backend
         echo "Installing backend dependencies with dev tools..."
-        npm ci --include=dev
+        NODE_ENV=development npm ci
         echo "Checking if Jest is available..."
         ls node_modules/.bin/jest || echo "Jest not found in node_modules/.bin/"
         npm list jest || echo "Jest not in npm list"
@@ -40,8 +40,8 @@ jobs:
         echo "Current directory: $(pwd)"
         echo "Node modules bin directory:"
         ls -la node_modules/.bin/ | grep jest || echo "No jest in .bin"
-        echo "Running tests with npx..."
-        npx jest
+        echo "Running tests..."
+        npm test
       env:
         NODE_ENV: test
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
