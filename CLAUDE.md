@@ -9,6 +9,7 @@ AI-powered git commit message generator with React frontend and Node.js backend.
 ## Common Commands
 
 ### Development
+
 ```bash
 # Start both frontend and backend in development mode
 npm run dev
@@ -27,6 +28,7 @@ npm run test:frontend  # Frontend tests (currently not configured)
 ```
 
 ### Frontend-specific (in frontend/ directory)
+
 ```bash
 npm run lint    # ESLint
 npm run build   # TypeScript compilation + Vite build
@@ -34,6 +36,7 @@ npm run preview # Preview production build
 ```
 
 ### Backend-specific (in backend/ directory)
+
 ```bash
 npm run dev     # Development with ts-node
 npm run build   # TypeScript compilation
@@ -44,22 +47,26 @@ npm test        # Jest tests
 ## Architecture
 
 ### Monorepo Structure
+
 - **Root**: Workspace configuration with concurrently for dev orchestration
 - **frontend/**: React + TypeScript + Vite + TailwindCSS
 - **backend/**: Node.js + Express + TypeScript + OpenAI API
 
 ### Key Backend Services
+
 - **OpenAI Service** (`services/openai.ts`): Standard commit generation
 - **Enhanced OpenAI Service** (`services/enhancedOpenAI.ts`): Large diff processing with chunking
 - **Diff Processor** (`utils/diffProcessor.ts`): Git diff validation and processing
 - **Validation** (`utils/validation.ts`): Git diff format validation
 
 ### Key Frontend Components
+
 - **CommitGenerator**: Main interface for diff input and commit generation
 - **ThemeProvider**: Dark/light theme management
 - **API Service** (`services/api.ts`): Backend communication layer
 
 ### API Endpoints
+
 - `POST /api/generate-commit`: Standard commit generation (< 100KB diffs)
 - `POST /api/generate-commit-enhanced`: Large diff processing (up to 10MB)
 - `GET /health`: Health check endpoint
@@ -68,6 +75,7 @@ npm test        # Jest tests
 ## Environment Setup
 
 Required environment variables:
+
 - `OPENAI_API_KEY`: OpenAI API key (required)
 - `PORT`: Backend port (default: 3000)
 - `NODE_ENV`: Environment (development/production)
@@ -84,6 +92,8 @@ Copy `.env.example` to `.env` and configure OpenAI API key.
 ## Code Style and Paradigms
 
 **Functional Programming Preferences:**
+
+- First and foremost focus on always doing best practices
 - Favor pure functions over stateful operations when possible
 - Use immutable data transformations (map, filter, reduce) over loops
 - Prefer function composition and higher-order functions
@@ -94,6 +104,7 @@ Copy `.env.example` to `.env` and configure OpenAI API key.
 - **Use arrow functions whenever possible** instead of function declarations
 
 **When to apply:**
+
 - Data processing and transformation logic
 - Business logic and validation functions
 - Array/object manipulation
@@ -101,6 +112,7 @@ Copy `.env.example` to `.env` and configure OpenAI API key.
 - State management patterns
 
 **When OOP/imperative may be better:**
+
 - Framework integrations (Express middleware, React class components if needed)
 - Performance-critical code requiring mutation
 - Complex stateful systems where encapsulation provides clarity
