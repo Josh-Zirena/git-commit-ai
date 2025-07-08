@@ -68,9 +68,6 @@ jobs:
         cp -r nginx deploy/
         cp .env.example deploy/.env.example
         
-        # Copy deployment scripts
-        cp -r scripts deploy/
-        
         # Create deployment script
         cat > deploy/deploy-docker.sh << 'EOF'
         #!/bin/bash
