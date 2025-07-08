@@ -17,3 +17,12 @@ coverage/
 
 # Docker
 .dockerignore
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+*.tfplan
+terraform.tfstate.d/
+.terraform.lock.hcl
