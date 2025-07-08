@@ -23,13 +23,25 @@ jobs:
       run: npm ci
     
     - name: Install backend dependencies (including dev tools)
-      run: cd backend && npm ci --include=dev
+      run: |
+        cd backend
+        echo "Installing backend dependencies with dev tools..."
+        npm ci --include=dev
+        echo "Checking if Jest is available..."
+        ls node_modules/.bin/jest || echo "Jest not found in node_modules/.bin/"
+        npm list jest || echo "Jest not in npm list"
     
     - name: Install frontend dependencies
       run: cd frontend && npm ci --include=dev
     
     - name: Run backend tests
-      run: cd backend && npm test
+      run: |
+        cd backend
+        echo "Current directory: $(pwd)"
+        echo "Node modules bin directory:"
+        ls -la node_modules/.bin/ | grep jest || echo "No jest in .bin"
+        echo "Running tests with npx..."
+        npx jest
       env:
         NODE_ENV: test
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
