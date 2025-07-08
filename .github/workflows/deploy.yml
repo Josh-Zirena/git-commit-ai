@@ -1,10 +1,20 @@
-name: Deploy to EC2 with Docker
+name: Deploy to ECS with OIDC
 
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: git-commit-ai
+  ECS_CLUSTER: git-commit-ai
+  ECS_SERVICE: git-commit-ai
+
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
   test:
@@ -53,159 +63,63 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Build and save Docker image
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+        aws-region: ${{ env.AWS_REGION }}
+    
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+    
+    - name: Build, tag, and push image to Amazon ECR
+      id: build-image
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
       run: |
-        docker build -t git-commit-ai:latest .
-        docker save git-commit-ai:latest | gzip > git-commit-ai-image.tar.gz
+        # Build Docker image
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
+        
+        # Push both tagged and latest images
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        
+        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
     
-    - name: Prepare deployment files
+    - name: Deploy to Amazon ECS
       run: |
-        # Create deployment directory
-        mkdir -p deploy
+        # Get current task definition
+        TASK_DEFINITION=$(aws ecs describe-task-definition \
+          --task-definition $ECS_CLUSTER \
+          --query 'taskDefinition' \
+          --output json)
         
-        # Copy Docker-related files
-        cp docker-compose.yml deploy/
-        cp -r nginx deploy/
-        cp .env.example deploy/.env.example
+        # Update image in task definition
+        NEW_TASK_DEFINITION=$(echo $TASK_DEFINITION | jq --arg IMAGE "${{ steps.build-image.outputs.image }}" \
+          '.containerDefinitions[0].image = $IMAGE | del(.taskDefinitionArn) | del(.revision) | del(.status) | del(.requiresAttributes) | del(.placementConstraints) | del(.compatibilities) | del(.registeredAt) | del(.registeredBy)')
         
-        # Create deployment script
-        cat > deploy/deploy-docker.sh << 'EOF'
-        #!/bin/bash
-        set -e
+        # Register new task definition
+        NEW_TASK_DEF_ARN=$(echo $NEW_TASK_DEFINITION | aws ecs register-task-definition --cli-input-json file:///dev/stdin --query 'taskDefinition.taskDefinitionArn' --output text)
         
-        echo "Starting Docker deployment..."
+        # Update ECS service with new task definition
+        aws ecs update-service \
+          --cluster $ECS_CLUSTER \
+          --service $ECS_SERVICE \
+          --task-definition $NEW_TASK_DEF_ARN
         
-        # Load Docker image
-        docker load < git-commit-ai-image.tar.gz
+        # Wait for deployment to complete
+        aws ecs wait services-stable \
+          --cluster $ECS_CLUSTER \
+          --services $ECS_SERVICE
         
-        # Stop existing containers
-        docker-compose down || true
+        echo "✅ Deployment completed successfully!"
         
-        # Remove old images (keep last 2)
-        docker images git-commit-ai --format "table {{.Repository}}\t{{.Tag}}\t{{.ID}}" | tail -n +2 | tail -n +3 | awk '{print $3}' | xargs -r docker rmi || true
-        
-        # Start new containers
-        docker-compose up -d
-        
-        # Wait for health check
-        echo "Waiting for application to be healthy..."
-        for i in {1..30}; do
-          if docker-compose ps | grep -q "healthy"; then
-            echo "Application is healthy!"
-            exit 0
-          fi
-          echo "Waiting... ($i/30)"
-          sleep 10
-        done
-        
-        echo "Health check failed, rolling back..."
-        docker-compose logs
-        exit 1
-        EOF
-        
-        chmod +x deploy/deploy-docker.sh
-    
-    - name: Initial Server Setup
-      uses: appleboy/ssh-action@v1.0.3
-      with:
-        host: ${{ secrets.EC2_HOST }}
-        username: ubuntu
-        key: ${{ secrets.EC2_PRIVATE_KEY }}
-        port: 22
-        script: |
-          set -e
-          
-          # Check if this is first-time setup
-          if [ ! -f "/opt/git-commit-ai/.setup-complete" ]; then
-            echo "First-time setup detected. Running initial server configuration..."
-            
-            # Update system
-            sudo apt-get update
-            sudo apt-get install -y curl wget git build-essential software-properties-common apt-transport-https ca-certificates gnupg lsb-release
-            
-            # Install Docker
-            if ! command -v docker &> /dev/null; then
-              curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-              echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-              sudo apt-get update
-              sudo apt-get install -y docker-ce docker-ce-cli containerd.io
-              sudo usermod -aG docker ubuntu
-              sudo systemctl enable docker
-              sudo systemctl start docker
-            fi
-            
-            # Install Docker Compose
-            if ! command -v docker-compose &> /dev/null; then
-              sudo curl -L "https://github.com/docker/compose/releases/download/v2.20.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-              sudo chmod +x /usr/local/bin/docker-compose
-            fi
-            
-            # Install additional tools
-            sudo apt-get install -y htop ncdu tree jq unzip zip bc
-            
-            # Create application directories
-            sudo mkdir -p /opt/git-commit-ai
-            sudo chown -R ubuntu:ubuntu /opt/git-commit-ai
-            
-            # Configure firewall
-            sudo ufw --force reset
-            sudo ufw default deny incoming
-            sudo ufw default allow outgoing
-            sudo ufw allow ssh
-            sudo ufw allow 80/tcp
-            sudo ufw allow 443/tcp
-            sudo ufw --force enable
-            
-            # Mark setup as complete
-            touch /opt/git-commit-ai/.setup-complete
-            echo "Initial server setup completed"
-          else
-            echo "Server already configured, skipping initial setup"
-          fi
-          
-          # Ensure Docker is running and user has access
-          sudo systemctl start docker
-          
-          # Prepare deployment directory
-          sudo mkdir -p /opt/git-commit-ai
-          sudo chown ubuntu:ubuntu /opt/git-commit-ai
-          cd /opt/git-commit-ai
-          
-          # Set up environment variables
-          cat > .env << EOF
-          NODE_ENV=production
-          PORT=3000
-          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
-          EOF
-          
-          echo "Docker deployment directory prepared"
-    
-    - name: Copy files to EC2
-      uses: appleboy/scp-action@v0.1.7
-      with:
-        host: ${{ secrets.EC2_HOST }}
-        username: ubuntu
-        key: ${{ secrets.EC2_PRIVATE_KEY }}
-        port: 22
-        source: "deploy/*,git-commit-ai-image.tar.gz"
-        target: "/opt/git-commit-ai/"
-    
-    - name: Deploy with Docker
-      uses: appleboy/ssh-action@v1.0.3
-      with:
-        host: ${{ secrets.EC2_HOST }}
-        username: ubuntu
-        key: ${{ secrets.EC2_PRIVATE_KEY }}
-        port: 22
-        script: |
-          set -e
-          
-          cd /opt/git-commit-ai
-          
-          # Make deployment script executable
-          chmod +x deploy-docker.sh
-          
-          # Run Docker deployment
-          ./deploy-docker.sh
-          
-          echo "Docker deployment completed successfully!"
+        # Get service status
+        aws ecs describe-services \
+          --cluster $ECS_CLUSTER \
+          --services $ECS_SERVICE \
+          --query 'services[0].deployments[0].{Status:status,TaskDefinition:taskDefinition,DesiredCount:desiredCount,RunningCount:runningCount}' \
+          --output table
