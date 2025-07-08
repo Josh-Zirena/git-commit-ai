@@ -26,7 +26,7 @@ jobs:
       run: |
         cd backend
         echo "Installing backend dependencies..."
-        NODE_ENV=development npm ci --no-workspaces --verbose
+        NODE_ENV=development npm ci --no-workspaces
         echo "Checking Jest installation..."
         ls node_modules/.bin/jest || echo "Jest not found in node_modules/.bin/"
     
