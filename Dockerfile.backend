@@ -8,14 +8,14 @@ WORKDIR /app
 COPY package*.json ./
 COPY backend/package*.json ./backend/
 
-# Install dependencies
-RUN npm ci --only=production
+# Install root dependencies
+RUN npm ci
 
 # Copy backend source code
 COPY backend/ ./backend/
 
-# Build the backend
-RUN cd backend && npm run build
+# Install backend dependencies and build
+RUN cd backend && npm ci && npm run build
 
 # Production stage
 FROM node:20-alpine AS production

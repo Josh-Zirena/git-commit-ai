@@ -425,6 +425,31 @@ resource "aws_iam_role_policy" "github_actions_policy" {
           "logs:PutLogEvents"
         ]
         Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket",
+          "s3:GetBucketLocation"
+        ]
+        Resource = aws_s3_bucket.frontend.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject",
+          "s3:PutObjectAcl"
+        ]
+        Resource = "${aws_s3_bucket.frontend.arn}/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "cloudfront:CreateInvalidation"
+        ]
+        Resource = aws_cloudfront_distribution.frontend.arn
       }
     ]
   })
