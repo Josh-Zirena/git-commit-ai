@@ -72,15 +72,77 @@ export function validateGitDiff(
 }
 
 function containsSuspiciousContent(input: string): boolean {
-  // Check if this appears to be a React/JSX file diff
-  const isReactFile = /\.(jsx?|tsx?)$/m.test(input) || 
-                     input.includes('className=') ||
-                     input.includes('export default function') ||
-                     input.includes('React') ||
-                     input.includes('useState') ||
-                     input.includes('useEffect');
+  // For a developer tool, we need to be very careful about what we consider "suspicious"
+  // Focus on actual security threats, not legitimate code patterns
+  
+  // Check if this appears to be a legitimate code file diff
+  const isLegitimateCodeFile = isCodeFileDiff(input);
+  
+  // If it's a legitimate code file, only check for very specific security threats
+  if (isLegitimateCodeFile) {
+    return containsActualSecurityThreats(input);
+  }
+  
+  // For non-code files (like plain text, config files, etc.), be more restrictive
+  return containsGeneralSuspiciousPatterns(input);
+}
 
-  // Check for common script injection patterns
+function isCodeFileDiff(input: string): boolean {
+  // Check for common code file extensions
+  const hasCodeFileExtension = /\.(js|ts|jsx|tsx|py|java|cpp|c|h|cs|php|rb|go|rs|kt|swift|scala|clj|hs|elm|dart|vue|svelte)$/m.test(input);
+  
+  // Check for common infrastructure/config file extensions
+  const hasInfraFileExtension = /\.(tf|yml|yaml|json|toml|ini|cfg|conf|dockerfile|makefile)$/mi.test(input);
+  
+  // Check for common programming language indicators
+  const hasCodeIndicators = [
+    /\bfunction\s+\w+\s*\(/,
+    /\bconst\s+\w+\s*=/,
+    /\blet\s+\w+\s*=/,
+    /\bvar\s+\w+\s*=/,
+    /\bimport\s+.*\s+from\s+/,
+    /\bexport\s+(default\s+)?/,
+    /\binterface\s+\w+/,
+    /\btype\s+\w+\s*=/,
+    /\bclass\s+\w+/,
+    /\bdef\s+\w+\s*\(/,
+    /\bpublic\s+\w+/,
+    /\bprivate\s+\w+/,
+    /\bresource\s+"/,
+    /\bprovider\s+"/,
+    /\bvariable\s+"/,
+  ].some(pattern => pattern.test(input));
+  
+  return hasCodeFileExtension || hasInfraFileExtension || hasCodeIndicators;
+}
+
+function containsActualSecurityThreats(input: string): boolean {
+  // Only flag actual security threats in code files
+  const securityThreats = [
+    // Actual script injection attempts (not legitimate code)
+    /<script\b[^>]*>[\s\S]*?<\/script>/gi,
+    
+    // Dangerous eval patterns with dynamic content (but allow legitimate eval in code)
+    /eval\s*\(\s*["'`][^"'`]*["'`]\s*\)/gi,
+    
+    // Actual DOM manipulation that could be XSS
+    /document\.write\s*\(\s*["'`][^"'`]*<script/gi,
+    
+    // Suspicious redirects with javascript protocol
+    /window\.location\s*=\s*["'`]javascript:/gi,
+    
+    // SQL injection attempts (be more specific)
+    /;\s*(DROP\s+TABLE|DELETE\s+FROM|INSERT\s+INTO|UPDATE\s+\w+\s+SET|CREATE\s+TABLE|ALTER\s+TABLE)\s+/gi,
+    
+    // Command injection attempts (be more specific)
+    /;\s*(rm\s+-rf|del\s+\/|format\s+c:|shutdown\s+\/|reboot\s+\/)\s+/gi,
+  ];
+  
+  return securityThreats.some(pattern => pattern.test(input));
+}
+
+function containsGeneralSuspiciousPatterns(input: string): boolean {
+  // For non-code files, be more restrictive
   const suspiciousPatterns = [
     /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,
     /javascript:/gi,
@@ -88,13 +150,9 @@ function containsSuspiciousContent(input: string): boolean {
     /document\.write/gi,
     /window\.location/gi,
     /\.innerHTML/gi,
+    /on\w+\s*=/gi,
   ];
-
-  // If it's a React file, be more permissive with event handlers
-  if (!isReactFile) {
-    suspiciousPatterns.push(/on\w+\s*=/gi);
-  }
-
+  
   return suspiciousPatterns.some(pattern => pattern.test(input));
 }
 

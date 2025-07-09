@@ -18,6 +18,12 @@ provider "aws" {
   region = var.aws_region
 }
 
+# Provider for ACM certificates (required in us-east-1 for CloudFront)
+provider "aws" {
+  alias  = "us_east_1"
+  region = "us-east-1"
+}
+
 variable "aws_region" {
   description = "AWS region"
   type        = string
@@ -34,6 +40,12 @@ variable "app_name" {
   description = "Application name"
   type        = string
   default     = "git-commit-ai"
+}
+
+variable "domain_name" {
+  description = "Domain name for the application"
+  type        = string
+  default     = "git-commit-ai.com"
 }
 
 # ECR Repository
@@ -462,6 +474,56 @@ resource "random_string" "bucket_suffix" {
   upper   = false
 }
 
+# Data source for Route 53 hosted zone
+data "aws_route53_zone" "main" {
+  name         = var.domain_name
+  private_zone = false
+}
+
+# ACM Certificate for HTTPS (must be in us-east-1 for CloudFront)
+resource "aws_acm_certificate" "ssl_cert" {
+  provider          = aws.us_east_1
+  domain_name       = var.domain_name
+  validation_method = "DNS"
+
+  subject_alternative_names = [
+    "*.${var.domain_name}"
+  ]
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = {
+    Name = "${var.app_name}-ssl-cert"
+  }
+}
+
+# Certificate validation records
+resource "aws_route53_record" "cert_validation" {
+  for_each = {
+    for dvo in aws_acm_certificate.ssl_cert.domain_validation_options : dvo.domain_name => {
+      name   = dvo.resource_record_name
+      record = dvo.resource_record_value
+      type   = dvo.resource_record_type
+    }
+  }
+
+  allow_overwrite = true
+  name            = each.value.name
+  records         = [each.value.record]
+  ttl             = 60
+  type            = each.value.type
+  zone_id         = data.aws_route53_zone.main.zone_id
+}
+
+# Wait for certificate validation
+resource "aws_acm_certificate_validation" "ssl_cert" {
+  provider                = aws.us_east_1
+  certificate_arn         = aws_acm_certificate.ssl_cert.arn
+  validation_record_fqdns = [for record in aws_route53_record.cert_validation : record.fqdn]
+}
+
 # S3 bucket for frontend static website hosting
 resource "aws_s3_bucket" "frontend" {
   bucket = "${var.app_name}-frontend-${random_string.bucket_suffix.result}"
@@ -536,6 +598,8 @@ resource "aws_cloudfront_distribution" "frontend" {
   is_ipv6_enabled     = true
   default_root_object = "index.html"
   comment             = "${var.app_name} frontend distribution"
+  
+  aliases = [var.domain_name]
 
   # Default cache behavior for frontend assets
   default_cache_behavior {
@@ -671,7 +735,9 @@ resource "aws_cloudfront_distribution" "frontend" {
 
   # SSL/TLS configuration
   viewer_certificate {
-    cloudfront_default_certificate = true
+    acm_certificate_arn      = aws_acm_certificate_validation.ssl_cert.certificate_arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
   }
 
   # Price class (optimize for cost vs performance)
@@ -711,6 +777,34 @@ resource "aws_s3_bucket_policy" "frontend" {
   })
 
   depends_on = [aws_s3_bucket_public_access_block.frontend]
+}
+
+# Route 53 A record for the domain
+resource "aws_route53_record" "root_domain" {
+  zone_id = data.aws_route53_zone.main.zone_id
+  name    = var.domain_name
+  type    = "A"
+  allow_overwrite = true
+
+  alias {
+    name                   = aws_cloudfront_distribution.frontend.domain_name
+    zone_id                = aws_cloudfront_distribution.frontend.hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+# Route 53 AAAA record for IPv6
+resource "aws_route53_record" "root_domain_ipv6" {
+  zone_id = data.aws_route53_zone.main.zone_id
+  name    = var.domain_name
+  type    = "AAAA"
+  allow_overwrite = true
+
+  alias {
+    name                   = aws_cloudfront_distribution.frontend.domain_name
+    zone_id                = aws_cloudfront_distribution.frontend.hosted_zone_id
+    evaluate_target_health = false
+  }
 }
 
 # S3 bucket website configuration
@@ -759,7 +853,7 @@ output "alb_dns_name" {
 
 output "application_url" {
   description = "URL to access the application"
-  value       = "https://${aws_cloudfront_distribution.frontend.domain_name}"
+  value       = "https://${var.domain_name}"
 }
 
 output "s3_frontend_bucket" {
