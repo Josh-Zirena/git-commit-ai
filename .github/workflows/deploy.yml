@@ -1,4 +1,4 @@
-name: Deploy to ECS with OIDC
+name: Deploy Frontend to S3 and Backend to ECS
 
 on:
   push:
@@ -52,10 +52,74 @@ jobs:
     - name: Run frontend linting
       run: cd frontend && npm run lint
     
-    - name: Test Docker build
-      run: docker build -t git-commit-ai:test .
+    - name: Test backend Docker build
+      run: docker build -f Dockerfile.backend -t git-commit-ai-backend:test .
 
-  deploy:
+  deploy-frontend:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: |
+        npm ci
+        cd frontend && npm ci --no-workspaces
+    
+    - name: Build frontend
+      run: cd frontend && npm run build
+      env:
+        VITE_API_URL: https://${{ secrets.CLOUDFRONT_DOMAIN_NAME }}
+    
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+        aws-region: ${{ env.AWS_REGION }}
+    
+    - name: Deploy to S3
+      run: |
+        # Sync built frontend to S3 bucket
+        aws s3 sync frontend/dist/ s3://${{ secrets.S3_FRONTEND_BUCKET }} --delete
+        
+        # Set proper content types and cache headers
+        aws s3 cp s3://${{ secrets.S3_FRONTEND_BUCKET }} s3://${{ secrets.S3_FRONTEND_BUCKET }} --recursive \
+          --exclude "*" \
+          --include "*.html" \
+          --metadata-directive REPLACE \
+          --cache-control "public, max-age=0, must-revalidate" \
+          --content-type "text/html"
+        
+        aws s3 cp s3://${{ secrets.S3_FRONTEND_BUCKET }} s3://${{ secrets.S3_FRONTEND_BUCKET }} --recursive \
+          --exclude "*" \
+          --include "*.js" \
+          --metadata-directive REPLACE \
+          --cache-control "public, max-age=31536000, immutable" \
+          --content-type "application/javascript"
+        
+        aws s3 cp s3://${{ secrets.S3_FRONTEND_BUCKET }} s3://${{ secrets.S3_FRONTEND_BUCKET }} --recursive \
+          --exclude "*" \
+          --include "*.css" \
+          --metadata-directive REPLACE \
+          --cache-control "public, max-age=31536000, immutable" \
+          --content-type "text/css"
+    
+    - name: Invalidate CloudFront cache
+      run: |
+        # Create CloudFront invalidation for updated content
+        aws cloudfront create-invalidation \
+          --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
+          --paths "/*"
+
+  deploy-backend:
     needs: test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -73,15 +137,15 @@ jobs:
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
     
-    - name: Build, tag, and push image to Amazon ECR
+    - name: Build, tag, and push backend image to Amazon ECR
       id: build-image
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         IMAGE_TAG: ${{ github.sha }}
       run: |
-        # Build Docker image
-        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
+        # Build Docker image (backend only)
+        docker build -f Dockerfile.backend -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker build -f Dockerfile.backend -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
         
         # Push both tagged and latest images
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
@@ -97,18 +161,13 @@ jobs:
           --query 'taskDefinition' \
           --output json)
         
-        # Debug: Show task definition structure
-        echo "Original task definition:"
-        echo $TASK_DEFINITION | jq '.'
-        
-        # Update image in task definition and remove read-only fields
-        NEW_TASK_DEFINITION=$(echo $TASK_DEFINITION | jq --arg IMAGE "${{ steps.build-image.outputs.image }}" \
+        # Update image and environment variables in task definition
+        NEW_TASK_DEFINITION=$(echo $TASK_DEFINITION | jq --arg IMAGE "${{ steps.build-image.outputs.image }}" --arg FRONTEND_URL "https://${{ secrets.CLOUDFRONT_DOMAIN_NAME }}" \
           '.containerDefinitions[0].image = $IMAGE | 
+           .containerDefinitions[0].environment = (.containerDefinitions[0].environment // []) + [
+             {"name": "FRONTEND_URL", "value": $FRONTEND_URL}
+           ] |
            del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .placementConstraints, .compatibilities, .registeredAt, .registeredBy)')
-        
-        # Debug: Show new task definition
-        echo "New task definition:"
-        echo $NEW_TASK_DEFINITION | jq '.'
         
         # Register new task definition
         echo $NEW_TASK_DEFINITION > /tmp/task-definition.json
@@ -125,7 +184,7 @@ jobs:
           --cluster $ECS_CLUSTER \
           --services $ECS_SERVICE
         
-        echo "✅ Deployment completed successfully!"
+        echo "✅ Backend deployment completed successfully!"
         
         # Get service status
         aws ecs describe-services \

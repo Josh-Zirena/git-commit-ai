@@ -17,7 +17,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Initialize logging setup
-const loggingSetup = createLoggingSetup();
+createLoggingSetup();
 
 // Security middleware - must be first
 app.use(securityMiddleware());
@@ -29,8 +29,18 @@ app.use(loggingMiddleware);
 // Metrics middleware
 app.use(metricsMiddleware);
 
-// Standard middleware
-app.use(cors());
+// CORS configuration for cross-origin requests from frontend
+app.use(cors({
+  origin: process.env.FRONTEND_URL || [
+    'http://localhost:5173', 
+    'http://localhost:3000',
+    /^https:\/\/.*\.cloudfront\.net$/,  // Allow CloudFront domains
+    /^https:\/\/.*\.amazonaws\.com$/    // Allow S3 direct access during development
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+}));
 app.use(express.json({ limit: '10mb' })); // Increased for large diff support
 
 // Rate limiting - 10 requests per minute (higher limit for testing)
@@ -46,9 +56,6 @@ const limiter = rateLimit({
 });
 
 app.use("/api/", limiter);
-
-// Serve static files from public directory
-app.use(express.static("public"));
 
 // Routes
 app.use("/health", healthRouter);
@@ -191,16 +198,12 @@ app.post("/api/generate-commit-enhanced", async (req: Request, res: Response) =>
   }
 });
 
-// 404 handler for non-existent routes
+// 404 handler for non-existent API routes
 app.use((_req: Request, res: Response) => {
-  if (_req.path.startsWith('/api/')) {
-    res.status(404).json({
-      error: "API endpoint not found",
-      success: false
-    });
-  } else {
-    res.status(404).send('Page not found');
-  }
+  res.status(404).json({
+    error: "API endpoint not found",
+    success: false
+  });
 });
 
 // Global error handler
