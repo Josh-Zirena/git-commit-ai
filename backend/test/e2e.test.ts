@@ -251,6 +251,7 @@ index 7890123..4567890 100644
     it('should include CORS headers', async () => {
       const response = await request(app)
         .get('/health')
+        .set('Origin', 'http://localhost:3000')
         .expect(200);
 
       expect(response.headers['access-control-allow-origin']).toBeDefined();

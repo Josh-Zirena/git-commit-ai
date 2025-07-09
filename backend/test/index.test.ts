@@ -51,6 +51,7 @@ index 1234567..abcdefg 100644
     it('should include CORS headers', async () => {
       const response = await request(app)
         .get('/health')
+        .set('Origin', 'http://localhost:3000')
         .expect(200);
 
       expect(response.headers).toHaveProperty('access-control-allow-origin');
@@ -59,18 +60,26 @@ index 1234567..abcdefg 100644
     it('should handle preflight requests', async () => {
       const response = await request(app)
         .options('/api/generate-commit')
+        .set('Origin', 'http://localhost:3000')
+        .set('Access-Control-Request-Method', 'POST')
+        .set('Access-Control-Request-Headers', 'Content-Type')
         .expect(204);
 
       expect(response.headers).toHaveProperty('access-control-allow-methods');
     });
   });
 
-  describe('Static File Serving', () => {
-    it('should serve static files from public directory', async () => {
-      // This test checks that static file middleware is configured
+  describe('API-only Backend', () => {
+    it('should return 404 for non-API routes', async () => {
+      // Backend no longer serves static files - only API endpoints
       const response = await request(app)
         .get('/nonexistent-static-file.txt')
         .expect(404);
+      
+      expect(response.body).toEqual({
+        error: 'API endpoint not found',
+        success: false
+      });
     });
   });
 
