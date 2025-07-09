@@ -10,8 +10,8 @@ import { securityMiddleware } from "./middleware/security";
 import { metricsMiddleware, createMetricsRouter } from "./middleware/metrics";
 import { setupGracefulShutdown } from "./utils/graceful-shutdown";
 import healthRouter from "./routes/health";
-import authRouter from "./routes/auth";
 import { createLoggingSetup } from "./config/logging";
+import { validateCognitoConfig } from "./config/cognito";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -59,8 +59,17 @@ app.use("/api/", limiter);
 
 // Routes
 app.use("/health", healthRouter);
-app.use("/auth", authRouter);
 app.use("/metrics", createMetricsRouter());
+
+// Conditionally enable auth routes only if Cognito is configured
+if (validateCognitoConfig()) {
+  logger.info("Cognito configuration found, enabling auth routes", "system");
+  import("./routes/auth").then(({ default: authRouter }) => {
+    app.use("/auth", authRouter);
+  });
+} else {
+  logger.warn("Cognito configuration not found, auth routes disabled", "system");
+}
 
 // Generate commit message endpoint
 app.post("/api/generate-commit", async (req: Request, res: Response) => {
