@@ -3,10 +3,6 @@
   "version": "1.0.0",
   "description": "AI-powered git commit message generator",
   "private": true,
-  "workspaces": [
-    "frontend",
-    "backend"
-  ],
   "scripts": {
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "cd backend && npm run dev",
