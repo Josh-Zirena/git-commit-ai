@@ -77,6 +77,9 @@ export class AISDKService {
         maxTokens: this.maxTokens,
       });
 
+      // Debug: Log the raw AI response
+      console.log('AI SDK Raw Response:', result.text);
+
       const parsed = this.parseResponse(result.text);
       
       return {
@@ -127,9 +130,11 @@ Rules:
 Git diff:
 ${gitDiff}
 
-Format your response as:
-COMMIT: [commit message]
-DESCRIPTION: [detailed description]`;
+IMPORTANT: You MUST format your response EXACTLY like this:
+COMMIT: [your commit message here]
+DESCRIPTION: [your detailed description here]
+
+Do not include any other text, explanations, or formatting. Start your response with "COMMIT:" followed by the commit message on the same line, then "DESCRIPTION:" followed by the description on the next line.`;
   }
 
   private parseResponse(content: string): { commitMessage: string; description: string } {
@@ -145,16 +150,22 @@ DESCRIPTION: [detailed description]`;
       }
     }
 
+    // Debug: Log parsing results
+    console.log('AI SDK Parsed commit message:', commitMessage);
+    console.log('AI SDK Parsed description:', description);
+
     // Fallback parsing if the format isn't followed
     if (!commitMessage && !description) {
       const allLines = content.trim().split('\n');
       commitMessage = allLines[0] || '';
       description = allLines.slice(1).join('\n').trim();
+      console.log('AI SDK Used fallback parsing - commit:', commitMessage, 'description:', description);
     }
 
     // Ensure we have at least a commit message
     if (!commitMessage) {
       commitMessage = content.trim().split('\n')[0] || 'chore: update code';
+      console.log('AI SDK Used default commit message:', commitMessage);
     }
 
     return { commitMessage, description };
