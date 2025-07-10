@@ -1,0 +1,24 @@
+<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" fill="none">
+  <defs>
+    <linearGradient id="gradient" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6366F1" />
+      <stop offset="100%" stop-color="#EC4899" />
+    </linearGradient>
+  </defs>
+
+  <!-- Rounded background -->
+  <rect width="64" height="64" rx="16" fill="url(#gradient)" />
+
+  <!-- Neural nodes -->
+  <circle cx="32" cy="32" r="2.8" fill="white"/> <!-- center -->
+  <circle cx="20" cy="20" r="2.8" fill="white"/>
+  <circle cx="44" cy="20" r="2.8" fill="white"/>
+  <circle cx="20" cy="44" r="2.8" fill="white"/>
+  <circle cx="44" cy="44" r="2.8" fill="white"/>
+
+  <!-- Curved connections -->
+  <path d="M20 20 Q32 28 32 32" stroke="white" stroke-width="1.4" stroke-linecap="round"/>
+  <path d="M44 20 Q32 28 32 32" stroke="white" stroke-width="1.4" stroke-linecap="round"/>
+  <path d="M20 44 Q32 36 32 32" stroke="white" stroke-width="1.4" stroke-linecap="round"/>
+  <path d="M44 44 Q32 36 32 32" stroke="white" stroke-width="1.4" stroke-linecap="round"/>
+</svg>

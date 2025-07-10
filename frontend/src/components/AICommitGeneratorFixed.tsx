@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { Send, Copy, Check, AlertCircle, RefreshCw, Zap } from 'lucide-react';
+import { Send, Copy, Check, AlertCircle, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { tomorrow, prism } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -102,19 +102,6 @@ export default function AICommitGeneratorFixed({
         transition={{ duration: 0.5, delay: 0.2 }}
       >
         <Card variant="glass" className="p-6">
-          {/* Header */}
-          <div className="text-center mb-6">
-            <div className="flex items-center justify-center gap-2 mb-2">
-              <Zap className="w-8 h-8 text-purple-600 dark:text-purple-400" />
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
-                Git Commit Generator
-              </h1>
-            </div>
-            <p className="text-gray-600 dark:text-gray-400">
-              AI-powered commit message generation
-            </p>
-          </div>
-
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label htmlFor="diff" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
