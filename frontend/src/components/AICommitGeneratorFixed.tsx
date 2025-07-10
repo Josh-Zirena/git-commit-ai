@@ -6,7 +6,6 @@ import { tomorrow, prism } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { useTheme } from '../hooks/useTheme';
 import { Card } from './ui/Card';
 import { Button } from './ui/Button';
-import { LoadingSpinner } from './LoadingSpinner';
 import { useClipboard } from '../hooks/useClipboard';
 import type { AICommitResponse } from '../types';
 import toast from 'react-hot-toast';
@@ -96,200 +95,192 @@ export default function AICommitGeneratorFixed({
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-6">
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="text-center space-y-2"
-      >
-        <div className="flex items-center justify-center gap-2">
-          <Zap className="w-8 h-8 text-purple-600 dark:text-purple-400" />
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
-            AI SDK Commit Generator
-          </h1>
-        </div>
-        <p className="text-gray-600 dark:text-gray-400">
-          Multi-provider AI-powered commit message generation • Provider: <span className="font-semibold text-purple-600 dark:text-purple-400">{provider}</span>
-          {model && <span> • Model: <span className="font-semibold">{model}</span></span>}
-        </p>
-      </motion.div>
-
-      {/* Input Section */}
+    <div className="max-w-4xl mx-auto px-4 py-8">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
+        transition={{ duration: 0.5, delay: 0.2 }}
       >
-        <Card>
-          <form onSubmit={handleSubmit} className="space-y-4">
+        <Card variant="glass" className="p-6">
+          {/* Header */}
+          <div className="text-center mb-6">
+            <div className="flex items-center justify-center gap-2 mb-2">
+              <Zap className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+              <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200">
+                AI SDK Commit Generator
+              </h2>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Provider: <span className="font-medium text-purple-600 dark:text-purple-400">{provider}</span>
+              {model && <span> • Model: <span className="font-medium">{model}</span></span>}
+            </p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label htmlFor="diff" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Git Diff
+                <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
+                  (Ctrl+Enter to submit)
+                </span>
               </label>
-              <textarea
-                id="diff"
-                value={diff}
-                onChange={(e) => setDiff(e.target.value)}
-                placeholder="Paste your git diff here..."
-                className="w-full h-64 p-4 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none font-mono text-sm"
-                disabled={isLoading}
-              />
-              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                Tip: Use Ctrl+Enter (Cmd+Enter on Mac) to generate
-              </p>
+              <div className="relative">
+                <textarea
+                  id="diff"
+                  value={diff}
+                  onChange={(e) => setDiff(e.target.value)}
+                  placeholder="Paste your git diff here..."
+                  className="w-full h-64 px-4 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none font-mono text-sm text-gray-900 dark:text-white transition-all duration-200"
+                  required
+                  disabled={isLoading}
+                />
+                {diff && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="absolute top-2 right-2"
+                  >
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleReset}
+                      className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                    </Button>
+                  </motion.div>
+                )}
+              </div>
             </div>
 
-            <div className="flex gap-3">
-              <Button
-                type="submit"
-                disabled={!diff.trim() || isLoading}
-                className="flex-1"
-              >
-                {isLoading ? (
-                  <>
-                    <LoadingSpinner size="sm" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-4 h-4" />
-                    Generate Commit Message
-                  </>
-                )}
-              </Button>
-              
-              {(result || error) && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleReset}
-                  className="px-4"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                </Button>
-              )}
-            </div>
+            <Button
+              type="submit"
+              disabled={isLoading || !diff.trim()}
+              isLoading={isLoading}
+              className="w-full sm:w-auto"
+            >
+              <Send className="w-4 h-4 mr-2" />
+              {isLoading ? 'Generating...' : 'Generate Commit Message'}
+            </Button>
           </form>
         </Card>
-      </motion.div>
 
-      {/* Error Message */}
-      <AnimatePresence>
-        {error && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-          >
-            <Card className="border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
-                <div>
-                  <h3 className="font-medium text-red-800 dark:text-red-200">
-                    Generation Failed
-                  </h3>
-                  <p className="text-red-700 dark:text-red-300 text-sm mt-1">
+        <AnimatePresence mode="wait">
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.3 }}
+              className="mt-6"
+            >
+              <Card variant="elevated" className="p-4 bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5 text-red-500" />
+                  <p className="text-red-700 dark:text-red-300 font-medium">
                     {error}
                   </p>
                 </div>
-              </div>
-            </Card>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              </Card>
+            </motion.div>
+          )}
 
-      {/* Results Section */}
-      <AnimatePresence>
-        {result && (
+          {result && (
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="space-y-4"
+            transition={{ duration: 0.3 }}
+            className="mt-6"
           >
-            {/* Commit Message */}
-            <Card className="border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  <h3 className="font-medium text-green-800 dark:text-green-200 mb-2">
-                    Generated Commit Message
-                  </h3>
-                  <SyntaxHighlighter
-                    language="bash"
-                    style={isDark ? tomorrow : prism}
-                    customStyle={{
-                      background: 'transparent',
-                      padding: '12px 0',
-                      margin: 0,
-                      fontSize: '14px',
-                    }}
-                  >
-                    {result.commitMessage}
-                  </SyntaxHighlighter>
-                </div>
+            <Card variant="elevated" className="p-6 bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-green-800 dark:text-green-300">
+                  Generated Commit Message
+                </h3>
                 <Button
+                  onClick={handleCopy}
                   variant="outline"
                   size="sm"
-                  onClick={handleCopy}
-                  className="flex-shrink-0"
+                  className="border-green-300 dark:border-green-700 text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-800"
                 >
                   {copied ? (
                     <>
-                      <Check className="w-4 h-4 text-green-600" />
+                      <Check className="w-4 h-4 mr-1" />
                       Copied!
                     </>
                   ) : (
                     <>
-                      <Copy className="w-4 h-4" />
+                      <Copy className="w-4 h-4 mr-1" />
                       Copy
                     </>
                   )}
                 </Button>
               </div>
-            </Card>
+              
+              <div className="space-y-4">
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-green-200 dark:border-green-700">
+                  <h4 className="text-sm font-medium text-green-800 dark:text-green-300 mb-2">
+                    Commit Message
+                  </h4>
+                  <SyntaxHighlighter
+                    language="text"
+                    style={isDark ? tomorrow : prism}
+                    customStyle={{
+                      margin: 0,
+                      background: 'transparent',
+                      padding: 0,
+                      fontSize: '14px',
+                      fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace',
+                    }}
+                  >
+                    {result.commitMessage}
+                  </SyntaxHighlighter>
+                </div>
+                
+                {result.description && (
+                  <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-700">
+                    <h4 className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-2">
+                      Description
+                    </h4>
+                    <p className="text-blue-700 dark:text-blue-300 text-sm leading-relaxed">
+                      {result.description}
+                    </p>
+                  </div>
+                )}
 
-            {/* Description */}
-            {result.description && (
-              <Card>
-                <h3 className="font-medium text-gray-800 dark:text-gray-200 mb-2">
-                  Description
-                </h3>
-                <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
-                  {result.description}
-                </p>
-              </Card>
-            )}
-
-            {/* Metadata */}
-            <Card>
-              <h3 className="font-medium text-gray-800 dark:text-gray-200 mb-2">
-                Generation Details
-              </h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                <div>
-                  <span className="text-gray-500 dark:text-gray-400">Provider:</span>
-                  <p className="font-medium capitalize">{result.provider}</p>
-                </div>
-                <div>
-                  <span className="text-gray-500 dark:text-gray-400">Model:</span>
-                  <p className="font-medium">{result.model}</p>
-                </div>
-                <div>
-                  <span className="text-gray-500 dark:text-gray-400">Tokens Used:</span>
-                  <p className="font-medium">{result.usage.totalTokens}</p>
-                </div>
-                <div>
-                  <span className="text-gray-500 dark:text-gray-400">Cost:</span>
-                  <p className="font-medium">
-                    {result.usage.promptTokens}→{result.usage.completionTokens}
-                  </p>
+                {/* Generation Details */}
+                <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-4 border border-purple-200 dark:border-purple-700">
+                  <h4 className="text-sm font-medium text-purple-800 dark:text-purple-300 mb-2">
+                    Generation Details
+                  </h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                    <div>
+                      <span className="text-purple-600 dark:text-purple-400 font-medium">Provider:</span>
+                      <p className="text-purple-700 dark:text-purple-300 capitalize">{result.provider}</p>
+                    </div>
+                    <div>
+                      <span className="text-purple-600 dark:text-purple-400 font-medium">Model:</span>
+                      <p className="text-purple-700 dark:text-purple-300">{result.model}</p>
+                    </div>
+                    <div>
+                      <span className="text-purple-600 dark:text-purple-400 font-medium">Total Tokens:</span>
+                      <p className="text-purple-700 dark:text-purple-300">{result.usage.totalTokens}</p>
+                    </div>
+                    <div>
+                      <span className="text-purple-600 dark:text-purple-400 font-medium">Input→Output:</span>
+                      <p className="text-purple-700 dark:text-purple-300">
+                        {result.usage.promptTokens}→{result.usage.completionTokens}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </Card>
           </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>
+      </motion.div>
     </div>
   );
 }
