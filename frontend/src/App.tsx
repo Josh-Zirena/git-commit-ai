@@ -3,6 +3,7 @@ import { Toaster } from 'react-hot-toast';
 import { useTheme } from './hooks/useTheme';
 import Header from './components/Header';
 import CommitGenerator from './components/CommitGenerator';
+import Footer from './components/Footer';
 import { ThemeProvider } from './components/ThemeProvider';
 
 const queryClient = new QueryClient({
@@ -19,11 +20,12 @@ function AppContent() {
   const isDark = theme === 'dark';
 
   return (
-    <div className="min-h-screen transition-colors duration-200 bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+    <div className="min-h-screen flex flex-col transition-colors duration-200 bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       <Header />
-      <main>
+      <main className="flex-1">
         <CommitGenerator />
       </main>
+      <Footer />
       <Toaster 
         position="top-right"
         toastOptions={{
