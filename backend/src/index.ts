@@ -4,6 +4,7 @@ import cors from "cors";
 import rateLimit from "express-rate-limit";
 import { createOpenAIService } from "./services/openai";
 import { createEnhancedOpenAIService } from "./services/enhancedOpenAI";
+import { createAISDKService } from "./services/aiSdkService";
 import { validateGitDiff } from "./utils/validation";
 import { requestIdMiddleware, loggingMiddleware, logger } from "./middleware/logging";
 import { securityMiddleware } from "./middleware/security";
@@ -190,6 +191,86 @@ app.post("/api/generate-commit-enhanced", async (req: Request, res: Response) =>
       } else if (error.message.includes("context_length_exceeded")) {
         res.status(413).json({
           error: "Git diff exceeds AI model context limits. Please split into smaller commits.",
+          success: false,
+        });
+      } else {
+        res.status(500).json({
+          error: error.message,
+          success: false,
+        });
+      }
+    } else {
+      res.status(500).json({
+        error: "An unknown error occurred",
+        success: false,
+      });
+    }
+  }
+});
+
+// AI SDK endpoint with multi-provider support
+app.post("/api/generate-commit-ai", async (req: Request, res: Response) => {
+  try {
+    const { diff, provider = 'openai', model } = req.body;
+
+    // Basic input validation
+    if (!diff) {
+      res.status(400).json({ 
+        error: "Git diff is required",
+        success: false
+      });
+      return;
+    }
+
+    // Validate provider
+    if (!['openai', 'anthropic'].includes(provider)) {
+      res.status(400).json({
+        error: "Invalid provider. Supported providers: openai, anthropic",
+        success: false
+      });
+      return;
+    }
+
+    // Validate git diff format and content
+    const validationResult = validateGitDiff(diff);
+    if (!validationResult.isValid) {
+      res.status(400).json({
+        error: "Invalid git diff format",
+        details: validationResult.errors,
+        success: false
+      });
+      return;
+    }
+
+    // Generate commit message using AI SDK
+    const aiService = createAISDKService({
+      provider,
+      model,
+    });
+    
+    const result = await aiService.generateCommitMessage(diff);
+
+    res.json({
+      success: true,
+      commitMessage: result.commitMessage,
+      description: result.description,
+      usage: result.usage,
+      provider: aiService.getCurrentProvider(),
+      model: aiService.getCurrentModel(),
+    });
+  } catch (error) {
+    req.logger.error("Error generating commit message (AI SDK)", req.requestId, error);
+
+    if (error instanceof Error) {
+      // Handle specific error types
+      if (error.message.includes("API key")) {
+        res.status(401).json({
+          error: "AI provider API key is not configured or invalid",
+          success: false,
+        });
+      } else if (error.message.includes("rate limit")) {
+        res.status(429).json({
+          error: "AI provider API rate limit exceeded",
           success: false,
         });
       } else {
