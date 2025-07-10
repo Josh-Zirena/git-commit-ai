@@ -105,14 +105,13 @@ export default function AICommitGeneratorFixed({
           {/* Header */}
           <div className="text-center mb-6">
             <div className="flex items-center justify-center gap-2 mb-2">
-              <Zap className="w-6 h-6 text-purple-600 dark:text-purple-400" />
-              <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200">
-                AI SDK Commit Generator
-              </h2>
+              <Zap className="w-8 h-8 text-purple-600 dark:text-purple-400" />
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+                Git Commit Generator
+              </h1>
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Provider: <span className="font-medium text-purple-600 dark:text-purple-400">{provider}</span>
-              {model && <span> • Model: <span className="font-medium">{model}</span></span>}
+            <p className="text-gray-600 dark:text-gray-400">
+              AI-powered commit message generation
             </p>
           </div>
 
