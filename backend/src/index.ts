@@ -62,6 +62,16 @@ app.use("/api/", limiter);
 app.use("/health", healthRouter);
 app.use("/metrics", createMetricsRouter());
 
+// Root endpoint for basic health check (fallback)
+app.get("/", (_req: Request, res: Response) => {
+  res.status(200).json({
+    status: "healthy",
+    service: "git-commit-ai",
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
+});
+
 // Conditionally enable auth routes only if Cognito is configured
 if (validateCognitoConfig()) {
   logger.info("Cognito configuration found, enabling auth routes", "system");

@@ -2,6 +2,10 @@
 
 An AI-powered tool that automatically generates meaningful git commit messages based on your code changes using OpenAI's GPT models.
 
+# See it in action
+
+https://www.git-commit-ai.com
+
 ## Features
 
 - **Smart Commit Generation**: Analyzes git diffs and generates contextual commit messages
@@ -29,27 +33,33 @@ An AI-powered tool that automatically generates meaningful git commit messages b
 ## Quick Start
 
 1. **Clone the repository**
+
    ```bash
    git clone <repository-url>
    cd git-commit-ai
    ```
 
 2. **Install dependencies**
+
    ```bash
    npm install
    ```
 
 3. **Set up environment variables**
+
    ```bash
    cp .env.example .env
    ```
+
    Edit `.env` and add your OpenAI API key:
+
    ```
    OPENAI_API_KEY=your_openai_api_key_here
    PORT=3000
    ```
 
 4. **Start the development servers**
+
    ```bash
    npm run dev
    ```
@@ -128,6 +138,7 @@ Standard endpoint for regular-sized diffs (recommended for diffs < 100KB):
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -154,6 +165,7 @@ Enhanced endpoint for large diffs with intelligent processing (recommended for d
 ```
 
 **Enhanced Response:**
+
 ```json
 {
   "success": true,
@@ -192,15 +204,16 @@ Enhanced endpoint for large diffs with intelligent processing (recommended for d
 
 ### Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `OPENAI_API_KEY` | OpenAI API key (required) | - |
-| `PORT` | Backend server port | 3000 |
-| `NODE_ENV` | Environment (development/production) | development |
+| Variable         | Description                          | Default     |
+| ---------------- | ------------------------------------ | ----------- |
+| `OPENAI_API_KEY` | OpenAI API key (required)            | -           |
+| `PORT`           | Backend server port                  | 3000        |
+| `NODE_ENV`       | Environment (development/production) | development |
 
 ### Rate Limiting
 
 The API includes rate limiting to prevent abuse:
+
 - **Development**: 50 requests per minute
 - **Production**: 10 requests per minute
 
@@ -240,7 +253,7 @@ The application handles various error scenarios:
 ## Documentation
 
 - **[API Documentation](docs/API.md)** - Complete API reference with examples
-- **[Deployment Guide](docs/DEPLOYMENT.md)** - AWS EC2 and Docker deployment instructions  
+- **[Deployment Guide](docs/DEPLOYMENT.md)** - AWS EC2 and Docker deployment instructions
 - **[Large Diff Handling](docs/LARGE-DIFFS.md)** - Guide for processing extremely large git diffs
 
 ## License
@@ -250,6 +263,7 @@ MIT License - see the LICENSE file for details.
 ## Support
 
 For issues and questions:
+
 - Check the [troubleshooting guide](docs/DEPLOYMENT.md#troubleshooting)
 - Review the [API documentation](docs/API.md)
 - See [large diff handling guide](docs/LARGE-DIFFS.md) for performance optimization
@@ -258,6 +272,7 @@ For issues and questions:
 ## Changelog
 
 ### v1.0.0
+
 - Initial release with basic commit generation
 - React frontend with modern UI
 - Express backend with OpenAI integration
