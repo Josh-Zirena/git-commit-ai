@@ -8,7 +8,7 @@ const api = axios.create({
 
 export const generateCommitMessage = async (request: CommitRequest): Promise<CommitResponse> => {
   try {
-    const response = await api.post<CommitResponse>('/generate-commit', request);
+    const response = await api.post<CommitResponse>('/lambda/generate-commit', request);
     
     return response.data;
   } catch (error) {
