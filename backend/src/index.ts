@@ -306,6 +306,155 @@ app.post("/api/generate-commit-ai", async (req: Request, res: Response) => {
   }
 });
 
+// Lambda-specific routes (with /api/lambda/ prefix for CloudFront routing)
+app.get("/api/lambda/health", (_req: Request, res: Response) => {
+  res.status(200).json({
+    status: "healthy",
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+    version: process.env.npm_package_version || "1.0.0",
+    dependencies: {
+      openai: { status: "healthy" }
+    }
+  });
+});
+
+app.post("/api/lambda/generate-commit", async (req: Request, res: Response) => {
+  try {
+    const { diff } = req.body;
+
+    // Basic input validation
+    if (!diff) {
+      res.status(400).json({ 
+        error: "Git diff is required",
+        success: false
+      });
+      return;
+    }
+
+    // Validate git diff format and content
+    const validationResult = validateGitDiff(diff);
+    if (!validationResult.isValid) {
+      res.status(400).json({
+        error: "Invalid git diff format",
+        details: validationResult.errors,
+        success: false
+      });
+      return;
+    }
+
+    // Generate commit message using OpenAI
+    const openaiService = createOpenAIService();
+    const result = await openaiService.generateCommitMessage(diff);
+
+    res.json({
+      success: true,
+      commitMessage: result.commitMessage,
+      description: result.description,
+      usage: result.usage,
+    });
+  } catch (error) {
+    req.logger.error("Error generating commit message (lambda)", req.requestId, error);
+
+    if (error instanceof Error) {
+      if (error.message.includes("API key")) {
+        res.status(401).json({
+          error: "OpenAI API key is not configured or invalid",
+          success: false,
+        });
+      } else if (error.message.includes("rate limit")) {
+        res.status(429).json({
+          error: "OpenAI API rate limit exceeded",
+          success: false,
+        });
+      } else {
+        res.status(500).json({
+          error: error.message,
+          success: false,
+        });
+      }
+    } else {
+      res.status(500).json({
+        error: "An unknown error occurred",
+        success: false,
+      });
+    }
+  }
+});
+
+app.post("/api/lambda/generate-commit-enhanced", async (req: Request, res: Response) => {
+  try {
+    const { diff } = req.body;
+
+    // Basic input validation
+    if (!diff) {
+      res.status(400).json({ 
+        error: "Git diff is required",
+        success: false
+      });
+      return;
+    }
+
+    // Validate git diff format and content
+    const validationResult = validateGitDiff(diff);
+    if (!validationResult.isValid) {
+      res.status(400).json({
+        error: "Invalid git diff format",
+        details: validationResult.errors,
+        success: false
+      });
+      return;
+    }
+
+    // Generate commit message using Enhanced OpenAI service
+    const enhancedService = createEnhancedOpenAIService();
+    const result = await enhancedService.generateCommitMessage(diff);
+
+    res.json({
+      success: true,
+      commitMessage: result.commitMessage,
+      description: result.description,
+      usage: result.usage,
+    });
+  } catch (error) {
+    req.logger.error("Error generating commit message (lambda enhanced)", req.requestId, error);
+
+    if (error instanceof Error) {
+      if (error.message.includes("API key")) {
+        res.status(401).json({
+          error: "OpenAI API key is not configured or invalid",
+          success: false,
+        });
+      } else if (error.message.includes("rate limit")) {
+        res.status(429).json({
+          error: "OpenAI API rate limit exceeded",
+          success: false,
+        });
+      } else if (error.message.includes("too large")) {
+        res.status(413).json({
+          error: "Git diff is too large to process. Please split into smaller commits.",
+          success: false,
+        });
+      } else if (error.message.includes("context_length_exceeded")) {
+        res.status(413).json({
+          error: "Git diff exceeds AI model context limits. Please split into smaller commits.",
+          success: false,
+        });
+      } else {
+        res.status(500).json({
+          error: error.message,
+          success: false,
+        });
+      }
+    } else {
+      res.status(500).json({
+        error: "An unknown error occurred",
+        success: false,
+      });
+    }
+  }
+});
+
 // 404 handler for non-existent API routes
 app.use((_req: Request, res: Response) => {
   res.status(404).json({
