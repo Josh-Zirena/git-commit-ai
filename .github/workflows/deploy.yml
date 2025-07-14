@@ -59,10 +59,31 @@ jobs:
     - name: Test backend Docker build
       run: docker build -f Dockerfile.backend -t git-commit-ai-backend:test .
 
-  deploy-frontend:
-    needs: test
+  check-frontend-changes:
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    outputs:
+      frontend-changed: ${{ steps.changes.outputs.frontend }}
+      backend-changed: ${{ steps.changes.outputs.backend }}
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dorny/paths-filter@v3
+      id: changes
+      with:
+        filters: |
+          frontend:
+            - 'frontend/**'
+            - 'package.json'
+            - 'package-lock.json'
+          backend:
+            - 'backend/**'
+            - 'Dockerfile.backend'
+            - 'package.json'
+            - 'package-lock.json'
+
+  deploy-frontend:
+    needs: [test, check-frontend-changes]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.check-frontend-changes.outputs.frontend-changed == 'true'
     
     steps:
     - uses: actions/checkout@v4
@@ -127,9 +148,9 @@ jobs:
           --paths "/*"
 
   deploy-backend:
-    needs: test
+    needs: [test, check-frontend-changes]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.check-frontend-changes.outputs.backend-changed == 'true'
     
     steps:
     - uses: actions/checkout@v4
@@ -201,9 +222,9 @@ jobs:
           --output table
 
   deploy-lambda:
-    needs: test
+    needs: [test, check-frontend-changes]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.check-frontend-changes.outputs.backend-changed == 'true'
     
     steps:
     - uses: actions/checkout@v4
