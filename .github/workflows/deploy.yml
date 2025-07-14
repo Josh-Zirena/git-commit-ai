@@ -244,12 +244,16 @@ jobs:
           --function-name ${{ secrets.LAMBDA_FUNCTION_NAME || 'git-commit-ai-backend-lambda' }} \
           --zip-file fileb://backend-lambda.zip
         
+        # Wait for code update to complete before updating configuration
+        aws lambda wait function-updated \
+          --function-name ${{ secrets.LAMBDA_FUNCTION_NAME || 'git-commit-ai-backend-lambda' }}
+        
         # Update environment variables
         aws lambda update-function-configuration \
           --function-name ${{ secrets.LAMBDA_FUNCTION_NAME || 'git-commit-ai-backend-lambda' }} \
           --environment "Variables={NODE_ENV=production,OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}}"
         
-        # Wait for update to complete
+        # Wait for configuration update to complete
         aws lambda wait function-updated \
           --function-name ${{ secrets.LAMBDA_FUNCTION_NAME || 'git-commit-ai-backend-lambda' }}
         

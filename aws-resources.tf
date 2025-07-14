@@ -923,7 +923,7 @@ resource "aws_lambda_function" "backend_lambda" {
   filename         = "backend-lambda.zip"
   function_name    = "${var.app_name}-backend-lambda"
   role            = aws_iam_role.lambda_execution_role.arn
-  handler         = "lambda.handler"
+  handler         = "dist/lambda.handler"
   runtime         = "nodejs20.x"
   timeout         = 30
   memory_size     = 512
