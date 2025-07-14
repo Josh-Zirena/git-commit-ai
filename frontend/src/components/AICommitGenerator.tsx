@@ -25,7 +25,7 @@ export default function AICommitGenerator({
   const isDark = theme === 'dark';
 
   const { messages, handleSubmit, isLoading, error, setMessages } = useChat({
-    api: '/api/generate-commit-ai',
+    api: '/api/lambda/generate-commit',
     body: {
       provider,
       model,

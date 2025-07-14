@@ -7,6 +7,7 @@ import { useTheme } from '../hooks/useTheme';
 import { Card } from './ui/Card';
 import { Button } from './ui/Button';
 import { useClipboard } from '../hooks/useClipboard';
+import { generateCommitMessageAI } from '../services/api';
 import type { AICommitResponse } from '../types';
 import toast from 'react-hot-toast';
 
@@ -35,24 +36,12 @@ export default function AICommitGeneratorFixed({
     setResult(null);
 
     try {
-      const response = await fetch('/api/generate-commit-ai', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          diff: diff.trim(),
-          provider,
-          model,
-        }),
+      const data = await generateCommitMessageAI({
+        diff: diff.trim(),
+        provider,
+        model,
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || `HTTP ${response.status}`);
-      }
-
-      const data: AICommitResponse = await response.json();
+      
       setResult(data);
       toast.success('Commit message generated successfully!');
     } catch (err) {
