@@ -27,6 +27,14 @@ app.use(securityMiddleware());
 app.use(requestIdMiddleware);
 app.use(loggingMiddleware);
 
+// Add backend identifier header
+app.use((_req: Request, res: Response, next: NextFunction) => {
+  const backendType = process.env.AWS_EXECUTION_ENV?.includes('Lambda') ? 'lambda' : 'ecs';
+  res.setHeader('X-Backend-Type', backendType);
+  res.setHeader('X-Backend-Version', process.env.npm_package_version || '1.0.0');
+  next();
+});
+
 // Metrics middleware
 app.use(metricsMiddleware);
 
@@ -324,21 +332,23 @@ app.use((error: any, req: Request, res: Response, _next: NextFunction) => {
   }
 });
 
-// Start server
-const server = app.listen(PORT, () => {
-  logger.info(`Server running on port ${PORT}`, "system");
-  logger.info(`Health check available at http://localhost:${PORT}/health`, "system");
-  logger.info(`Metrics available at http://localhost:${PORT}/metrics`, "system");
-  logger.info(`API endpoint available at http://localhost:${PORT}/api/generate-commit`, "system");
-});
+// Start server only when not in Lambda environment
+if (process.env.AWS_EXECUTION_ENV !== 'AWS_Lambda_nodejs20.x' && process.env.AWS_EXECUTION_ENV !== 'AWS_Lambda_nodejs18.x') {
+  const server = app.listen(PORT, () => {
+    logger.info(`Server running on port ${PORT}`, "system");
+    logger.info(`Health check available at http://localhost:${PORT}/health`, "system");
+    logger.info(`Metrics available at http://localhost:${PORT}/metrics`, "system");
+    logger.info(`API endpoint available at http://localhost:${PORT}/api/generate-commit`, "system");
+  });
 
-// Setup graceful shutdown
-setupGracefulShutdown(server, {
-  timeout: 30000,
-  onShutdown: async () => {
-    logger.info("Performing cleanup tasks before shutdown", "system");
-    // Add any cleanup tasks here
-  }
-});
+  // Setup graceful shutdown
+  setupGracefulShutdown(server, {
+    timeout: 30000,
+    onShutdown: async () => {
+      logger.info("Performing cleanup tasks before shutdown", "system");
+      // Add any cleanup tasks here
+    }
+  });
+}
 
 export default app;

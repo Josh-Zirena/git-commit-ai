@@ -1,142 +1,122 @@
-# ECS Deployment Guide
+# Dual Deployment Setup - ECS + Lambda
 
-This guide helps you migrate from SSH-based EC2 deployment to modern ECS with GitHub Actions OIDC.
+This project now supports **dual deployment** - you can run the same backend API via both AWS ECS (containers) and AWS Lambda (serverless).
 
-## Prerequisites
+## Architecture Overview
 
-1. **AWS CLI configured** with appropriate permissions
-2. **Terraform installed** (optional, for infrastructure as code)
-3. **GitHub repository** with admin access
+### Current Setup
+- **Frontend**: React app deployed to S3 + CloudFront (unchanged)
+- **Backend Option 1**: Express server on ECS Fargate + ALB (existing)
+- **Backend Option 2**: Express server on Lambda + API Gateway (new)
 
-## Step 1: Deploy AWS Infrastructure
+Both backends serve identical APIs and functionality.
 
-### Option A: Using Terraform (Recommended)
+## Deployment Instructions
 
-1. **Update variables** in `aws-resources.tf`:
-   ```bash
-   # Edit the file and update these variables:
-   variable "github_repo" {
-     default = "YOUR_GITHUB_USERNAME/git-commit-ai"
-   }
-   ```
-
-2. **Deploy infrastructure**:
-   ```bash
-   terraform init
-   terraform plan
-   terraform apply
-   ```
-
-3. **Note the outputs** - you'll need these for GitHub secrets:
-   ```bash
-   terraform output
-   ```
-
-### Option B: Manual Setup (using AWS Console)
-
-Follow the instructions in `aws-setup.md` to manually create:
-- GitHub OIDC Identity Provider
-- IAM Role for GitHub Actions
-- ECR Repository
-- ECS Cluster and Service
-
-## Step 2: Configure GitHub Secrets
-
-Add these secrets to your GitHub repository (Settings → Secrets and variables → Actions):
-
-1. **AWS_ROLE_ARN**: The ARN of the GitHub Actions IAM role
-   ```
-   arn:aws:iam::YOUR_ACCOUNT_ID:role/git-commit-ai-github-actions-role
-   ```
-
-2. **OPENAI_API_KEY**: Your OpenAI API key (keep existing)
-
-## Step 3: Set OpenAI API Key in AWS Secrets Manager
+### 1. Install Lambda Dependencies
 
 ```bash
-aws secretsmanager put-secret-value \
-  --secret-id git-commit-ai-openai-api-key \
-  --secret-string "YOUR_OPENAI_API_KEY"
+cd backend
+npm install @codegenie/serverless-express@^4.16.0 --save
+npm install @types/aws-lambda@^8.10.150 --save-dev
 ```
 
-## Step 4: Update GitHub Actions Workflow
-
-1. **Rename old workflow** (to keep as backup):
-   ```bash
-   mv .github/workflows/deploy.yml .github/workflows/deploy-ec2-backup.yml
-   ```
-
-2. **Rename new workflow**:
-   ```bash
-   mv .github/workflows/deploy-ecs.yml .github/workflows/deploy.yml
-   ```
-
-3. **Commit and push** to trigger deployment:
-   ```bash
-   git add .
-   git commit -m "feat: migrate to ECS deployment with OIDC"
-   git push origin main
-   ```
-
-## Step 5: Monitor Deployment
-
-1. **Watch GitHub Actions**: Check the Actions tab in your repository
-2. **Monitor ECS**: Check ECS console for service status
-3. **Check logs**: View CloudWatch logs for application logs
-
-## Step 6: Access Your Application
-
-After successful deployment, your application will be accessible via:
-- **ECS Service**: Check the ECS service for the public IP
-- **Optional**: Set up an Application Load Balancer for a custom domain
-
-## Troubleshooting
-
-### Common Issues
-
-1. **OIDC Trust Policy**: Ensure the repository name matches exactly
-2. **ECR Permissions**: Verify the GitHub role has ECR push permissions
-3. **ECS Task Role**: Ensure the task execution role has Secrets Manager access
-
-### Useful Commands
+### 2. Deploy Infrastructure
 
 ```bash
-# Check ECS service status
-aws ecs describe-services --cluster git-commit-ai --services git-commit-ai
-
-# View CloudWatch logs
-aws logs tail /ecs/git-commit-ai --follow
-
-# Check task definition
-aws ecs describe-task-definition --task-definition git-commit-ai
+# Deploy both ECS and Lambda resources
+terraform plan
+terraform apply
 ```
 
-## Security Benefits
+This creates:
+- **Existing**: ECS cluster, ALB, ECR repository
+- **New**: Lambda function, API Gateway, IAM roles
 
-✅ **No SSH keys** - Uses OIDC for authentication  
-✅ **No IP whitelisting** - Uses AWS IAM roles  
-✅ **Managed infrastructure** - ECS handles scaling and health checks  
-✅ **Encrypted secrets** - Uses AWS Secrets Manager  
-✅ **Audit trail** - All actions logged in CloudTrail  
+### 3. GitHub Actions Deployment
+
+The workflow now includes both deployment jobs:
+- `deploy-backend`: ECS deployment (existing)
+- `deploy-lambda`: Lambda deployment (new)
+
+Both run in parallel after tests pass.
+
+### 4. Required GitHub Secrets
+
+Add these new secrets to your repository:
+- `LAMBDA_FUNCTION_NAME`: `git-commit-ai-backend-lambda` (or use default)
+
+Existing secrets remain the same.
+
+## Usage
+
+### ECS Endpoint (existing)
+```
+https://your-domain.com/api/generate-commit
+```
+
+### Lambda Endpoint (new)
+```
+https://api-gateway-id.execute-api.us-east-1.amazonaws.com/prod/api/generate-commit
+```
+
+## Benefits of Dual Deployment
+
+### ECS Use Cases
+- Always-on availability
+- Consistent performance
+- Complex, long-running requests
+- Persistent connections
+
+### Lambda Use Cases  
+- Cost optimization for low traffic
+- Auto-scaling for burst traffic
+- Pay-per-request pricing
+- Zero infrastructure management
+
+## File Changes Made
+
+### New Files
+- `backend/src/lambda.ts` - Lambda handler entry point
+- `DEPLOYMENT.md` - This documentation
+
+### Modified Files
+- `backend/package.json` - Added Lambda dependencies
+- `backend/src/index.ts` - Conditional server startup (no Lambda conflicts)
+- `aws-resources.tf` - Added Lambda infrastructure resources
+- `.github/workflows/deploy.yml` - Added Lambda deployment job
+
+### Key Technical Details
+
+1. **Shared Codebase**: Both deployments use identical Express app and business logic
+2. **Environment Detection**: Server startup is conditional based on Lambda environment
+3. **Modern Dependencies**: Uses `@codegenie/serverless-express` (replaces deprecated `@vendia/serverless-express`)
+4. **Independent Scaling**: Each deployment can scale independently
+5. **Parallel CI/CD**: Both deployments happen simultaneously
+
+## Testing
+
+Run tests locally to verify both configurations work:
+
+```bash
+# Test ECS configuration (standard Express server)
+cd backend
+npm run dev
+
+# Test Lambda configuration (requires AWS SAM or serverless-offline for local testing)
+# Or deploy and test via API Gateway URL
+```
 
 ## Cost Optimization
 
-- **Fargate Spot**: Use spot instances for development
-- **Auto Scaling**: Configure CPU/memory-based scaling
-- **Scheduled Scaling**: Scale down during off-hours
+- **Low traffic**: Route to Lambda for cost savings
+- **High traffic**: Route to ECS for consistent performance  
+- **A/B testing**: Split traffic between deployments
+- **Failover**: Use one as backup for the other
 
 ## Next Steps
 
-1. **Set up Application Load Balancer** for custom domain
-2. **Configure auto-scaling** based on CPU/memory
-3. **Set up monitoring** with CloudWatch alarms
-4. **Implement blue/green deployments** for zero downtime
-
-## Cleanup
-
-To remove all resources:
-```bash
-terraform destroy
-```
-
-Or manually delete the ECS service, cluster, ECR repository, and IAM resources.
+1. Deploy infrastructure: `terraform apply`
+2. Push to main branch to trigger deployments
+3. Test both endpoints work correctly
+4. Configure traffic routing as needed (optional)

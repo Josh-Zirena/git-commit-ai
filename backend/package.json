@@ -7,7 +7,12 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
-    "test": "jest"
+    "test": "jest",
+    "build:lambda": "npm run build:lambda:clean && npm run build:lambda:compile && npm run build:lambda:deps && npm run build:lambda:package",
+    "build:lambda:clean": "rm -rf lambda-build && rm -f ../backend-lambda.zip",
+    "build:lambda:compile": "tsc --outDir lambda-build/dist",
+    "build:lambda:deps": "cd lambda-build && npm init -y && npm install --production --no-package-lock $(node -pe 'Object.keys(require(\"../package.json\").dependencies).join(\" \")')",
+    "build:lambda:package": "cd lambda-build && zip -r ../../backend-lambda.zip . -x '*.git*' '*.DS_Store*' 'node_modules/.cache/*'"
   },
   "keywords": [
     "git",
@@ -18,6 +23,7 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@types/aws-lambda": "^8.10.150",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
     "@types/jest": "^30.0.0",
@@ -34,6 +40,7 @@
     "@ai-sdk/anthropic": "^1.2.12",
     "@ai-sdk/openai": "^1.3.23",
     "@aws-sdk/client-cognito-identity-provider": "^3.705.0",
+    "@codegenie/serverless-express": "^4.16.0",
     "@types/uuid": "^10.0.0",
     "ai": "^4.3.17",
     "cors": "^2.8.5",

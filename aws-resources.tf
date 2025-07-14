@@ -462,6 +462,16 @@ resource "aws_iam_role_policy" "github_actions_policy" {
           "cloudfront:CreateInvalidation"
         ]
         Resource = aws_cloudfront_distribution.frontend.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "lambda:UpdateFunctionCode",
+          "lambda:UpdateFunctionConfiguration",
+          "lambda:GetFunction",
+          "lambda:InvokeFunction"
+        ]
+        Resource = aws_lambda_function.backend_lambda.arn
       }
     ]
   })
@@ -594,6 +604,20 @@ resource "aws_cloudfront_distribution" "frontend" {
     }
   }
 
+  # Lambda origin for API calls
+  origin {
+    domain_name = "${aws_api_gateway_rest_api.lambda_api.id}.execute-api.${var.aws_region}.amazonaws.com"
+    origin_id   = "LAMBDA-${var.app_name}-api"
+    origin_path = "/prod"
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "https-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
   enabled             = true
   is_ipv6_enabled     = true
   default_root_object = "index.html"
@@ -623,7 +647,30 @@ resource "aws_cloudfront_distribution" "frontend" {
     max_ttl     = 86400  # 24 hours
   }
 
-  # API cache behavior
+  # API cache behavior - Lambda routing with header
+  ordered_cache_behavior {
+    path_pattern           = "/api/lambda/*"
+    allowed_methods        = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods         = ["GET", "HEAD", "OPTIONS"]
+    target_origin_id       = "LAMBDA-${var.app_name}-api"
+    compress               = true
+    viewer_protocol_policy = "redirect-to-https"
+
+    forwarded_values {
+      query_string = true
+      headers      = ["Origin", "Authorization", "Content-Type", "X-Requested-With", "Accept"]
+
+      cookies {
+        forward = "all"
+      }
+    }
+
+    min_ttl     = 0
+    default_ttl = 0  # Don't cache API responses
+    max_ttl     = 0
+  }
+
+  # API cache behavior - ECS (default)
   ordered_cache_behavior {
     path_pattern           = "/api/*"
     allowed_methods        = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
@@ -869,4 +916,182 @@ output "cloudfront_distribution_id" {
 output "cloudfront_domain_name" {
   description = "CloudFront distribution domain name"
   value       = aws_cloudfront_distribution.frontend.domain_name
+}
+
+# Lambda Function for Serverless Backend
+resource "aws_lambda_function" "backend_lambda" {
+  filename         = "backend-lambda.zip"
+  function_name    = "${var.app_name}-backend-lambda"
+  role            = aws_iam_role.lambda_execution_role.arn
+  handler         = "lambda.handler"
+  runtime         = "nodejs20.x"
+  timeout         = 30
+  memory_size     = 512
+  source_code_hash = filebase64sha256("backend-lambda.zip")
+  
+  environment {
+    variables = {
+      NODE_ENV = "production"
+    }
+  }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.lambda_logs,
+    aws_cloudwatch_log_group.lambda,
+  ]
+
+  tags = {
+    Name = "${var.app_name}-backend-lambda"
+  }
+}
+
+# CloudWatch Log Group for Lambda
+resource "aws_cloudwatch_log_group" "lambda" {
+  name              = "/aws/lambda/${var.app_name}-backend-lambda"
+  retention_in_days = 30
+}
+
+# Lambda Execution Role
+resource "aws_iam_role" "lambda_execution_role" {
+  name = "${var.app_name}-lambda-execution-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+# Attach basic Lambda execution role
+resource "aws_iam_role_policy_attachment" "lambda_logs" {
+  role       = aws_iam_role.lambda_execution_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+# Lambda policy for secrets access
+resource "aws_iam_role_policy" "lambda_secrets_policy" {
+  name = "${var.app_name}-lambda-secrets-policy"
+  role = aws_iam_role.lambda_execution_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue"
+        ]
+        Resource = aws_secretsmanager_secret.openai_api_key.arn
+      }
+    ]
+  })
+}
+
+# API Gateway REST API for Lambda
+resource "aws_api_gateway_rest_api" "lambda_api" {
+  name        = "${var.app_name}-lambda-api"
+  description = "API Gateway for Lambda backend"
+  
+  endpoint_configuration {
+    types = ["REGIONAL"]
+  }
+
+  tags = {
+    Name = "${var.app_name}-lambda-api"
+  }
+}
+
+# API Gateway Resource (proxy+)
+resource "aws_api_gateway_resource" "lambda_proxy" {
+  rest_api_id = aws_api_gateway_rest_api.lambda_api.id
+  parent_id   = aws_api_gateway_rest_api.lambda_api.root_resource_id
+  path_part   = "{proxy+}"
+}
+
+# API Gateway Method (ANY)
+resource "aws_api_gateway_method" "lambda_proxy" {
+  rest_api_id   = aws_api_gateway_rest_api.lambda_api.id
+  resource_id   = aws_api_gateway_resource.lambda_proxy.id
+  http_method   = "ANY"
+  authorization = "NONE"
+}
+
+# API Gateway Integration
+resource "aws_api_gateway_integration" "lambda_proxy" {
+  rest_api_id = aws_api_gateway_rest_api.lambda_api.id
+  resource_id = aws_api_gateway_method.lambda_proxy.resource_id
+  http_method = aws_api_gateway_method.lambda_proxy.http_method
+
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.backend_lambda.invoke_arn
+}
+
+# API Gateway Method for root path
+resource "aws_api_gateway_method" "lambda_root" {
+  rest_api_id   = aws_api_gateway_rest_api.lambda_api.id
+  resource_id   = aws_api_gateway_rest_api.lambda_api.root_resource_id
+  http_method   = "ANY"
+  authorization = "NONE"
+}
+
+# API Gateway Integration for root path
+resource "aws_api_gateway_integration" "lambda_root" {
+  rest_api_id = aws_api_gateway_rest_api.lambda_api.id
+  resource_id = aws_api_gateway_method.lambda_root.resource_id
+  http_method = aws_api_gateway_method.lambda_root.http_method
+
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.backend_lambda.invoke_arn
+}
+
+# API Gateway Deployment
+resource "aws_api_gateway_deployment" "lambda_api" {
+  depends_on = [
+    aws_api_gateway_integration.lambda_proxy,
+    aws_api_gateway_integration.lambda_root,
+  ]
+
+  rest_api_id = aws_api_gateway_rest_api.lambda_api.id
+  stage_name  = "prod"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# Lambda permission for API Gateway
+resource "aws_lambda_permission" "api_gateway" {
+  statement_id  = "AllowExecutionFromAPIGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.backend_lambda.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.lambda_api.execution_arn}/*/*"
+}
+
+# Data source for current AWS account ID
+data "aws_caller_identity" "current" {}
+
+# Outputs for Lambda deployment
+output "lambda_function_name" {
+  description = "Lambda function name"
+  value       = aws_lambda_function.backend_lambda.function_name
+}
+
+output "lambda_api_gateway_url" {
+  description = "API Gateway URL for Lambda backend"
+  value       = "${aws_api_gateway_rest_api.lambda_api.execution_arn}/prod"
+}
+
+output "lambda_api_gateway_invoke_url" {
+  description = "API Gateway invoke URL for Lambda backend"
+  value       = "https://${aws_api_gateway_rest_api.lambda_api.id}.execute-api.${var.aws_region}.amazonaws.com/prod"
 }

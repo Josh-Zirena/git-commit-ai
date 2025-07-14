@@ -199,3 +199,64 @@ jobs:
           --services $ECS_SERVICE \
           --query 'services[0].deployments[0].{Status:status,TaskDefinition:taskDefinition,DesiredCount:desiredCount,RunningCount:runningCount}' \
           --output table
+
+  deploy-lambda:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: |
+          package-lock.json
+          backend/package-lock.json
+    
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+        aws-region: ${{ env.AWS_REGION }}
+    
+    - name: Install backend dependencies
+      run: |
+        cd backend
+        npm ci
+    
+    - name: Build Lambda package
+      run: |
+        cd backend
+        npm run build:lambda
+        
+        # Verify zip contents
+        echo "Lambda package contents:"
+        unzip -l ../backend-lambda.zip | head -20
+    
+    - name: Deploy Lambda function
+      run: |
+        # Update Lambda function code (zip file is in project root)
+        aws lambda update-function-code \
+          --function-name ${{ secrets.LAMBDA_FUNCTION_NAME || 'git-commit-ai-backend-lambda' }} \
+          --zip-file fileb://backend-lambda.zip
+        
+        # Update environment variables
+        aws lambda update-function-configuration \
+          --function-name ${{ secrets.LAMBDA_FUNCTION_NAME || 'git-commit-ai-backend-lambda' }} \
+          --environment "Variables={NODE_ENV=production,OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}}"
+        
+        # Wait for update to complete
+        aws lambda wait function-updated \
+          --function-name ${{ secrets.LAMBDA_FUNCTION_NAME || 'git-commit-ai-backend-lambda' }}
+        
+        echo "✅ Lambda deployment completed successfully!"
+        
+        # Get function status
+        aws lambda get-function \
+          --function-name ${{ secrets.LAMBDA_FUNCTION_NAME || 'git-commit-ai-backend-lambda' }} \
+          --query 'Configuration.{FunctionName:FunctionName,Runtime:Runtime,State:State,LastModified:LastModified}' \
+          --output table
