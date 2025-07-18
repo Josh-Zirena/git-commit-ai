@@ -173,6 +173,16 @@ resource "aws_iam_role_policy" "github_actions_policy" {
           "lambda:InvokeFunction"
         ]
         Resource = aws_lambda_function.backend_lambda.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ecr:GetAuthorizationToken",
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage"
+        ]
+        Resource = "*"
       }
     ]
   })
