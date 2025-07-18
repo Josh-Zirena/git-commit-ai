@@ -9,5 +9,6 @@ export const handler = (
   context: Context,
   callback: Callback
 ) => {
+  // Updated to use Secrets Manager for OpenAI API key
   return serverlessApp(event, context, callback);
 };
