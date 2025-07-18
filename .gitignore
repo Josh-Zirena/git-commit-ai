@@ -28,3 +28,7 @@ plan.json
 terraform.tfstate.d/
 .terraform.lock.hcl
 crash.log
+
+# Lambda build artifacts
+backend-lambda.zip
+backend/lambda-build/
