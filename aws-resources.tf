@@ -48,113 +48,6 @@ variable "domain_name" {
   default     = "git-commit-ai.com"
 }
 
-# ECR Repository
-resource "aws_ecr_repository" "app" {
-  name                 = var.app_name
-  image_tag_mutability = "MUTABLE"
-
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-
-}
-
-# ECR Lifecycle Policy
-resource "aws_ecr_lifecycle_policy" "app" {
-  repository = aws_ecr_repository.app.name
-
-  policy = jsonencode({
-    rules = [
-      {
-        rulePriority = 1
-        description  = "Keep last 10 images"
-        selection = {
-          tagStatus   = "any"
-          countType   = "imageCountMoreThan"
-          countNumber = 10
-        }
-        action = {
-          type = "expire"
-        }
-      }
-    ]
-  })
-}
-
-# ECS Cluster
-resource "aws_ecs_cluster" "main" {
-  name = var.app_name
-
-  setting {
-    name  = "containerInsights"
-    value = "enabled"
-  }
-}
-
-# ECS Task Definition
-resource "aws_ecs_task_definition" "app" {
-  family                   = var.app_name
-  network_mode             = "awsvpc"
-  requires_compatibilities = ["FARGATE"]
-  cpu                      = 256
-  memory                   = 512
-  execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
-
-  container_definitions = jsonencode([
-    {
-      name  = var.app_name
-      image = "${aws_ecr_repository.app.repository_url}:latest"
-      
-      portMappings = [
-        {
-          containerPort = 3000
-          protocol      = "tcp"
-        }
-      ]
-
-      environment = [
-        {
-          name  = "NODE_ENV"
-          value = "production"
-        },
-        {
-          name  = "PORT"
-          value = "3000"
-        }
-      ]
-
-      secrets = [
-        {
-          name      = "OPENAI_API_KEY"
-          valueFrom = aws_secretsmanager_secret.openai_api_key.arn
-        }
-      ]
-
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          awslogs-group         = aws_cloudwatch_log_group.app.name
-          awslogs-region        = var.aws_region
-          awslogs-stream-prefix = "ecs"
-        }
-      }
-
-      healthCheck = {
-        command = ["CMD-SHELL", "curl -f http://localhost:3000/health || exit 1"]
-        interval = 30
-        timeout = 5
-        retries = 3
-        startPeriod = 60
-      }
-    }
-  ])
-}
-
-# CloudWatch Log Group
-resource "aws_cloudwatch_log_group" "app" {
-  name              = "/ecs/${var.app_name}"
-  retention_in_days = 30
-}
 
 # Secrets Manager for OpenAI API Key
 resource "aws_secretsmanager_secret" "openai_api_key" {
@@ -163,47 +56,16 @@ resource "aws_secretsmanager_secret" "openai_api_key" {
   recovery_window_in_days = 7
 }
 
-# ECS Task Execution Role
-resource "aws_iam_role" "ecs_task_execution_role" {
-  name = "${var.app_name}-ecs-task-execution-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "ecs-tasks.amazonaws.com"
-        }
-      }
-    ]
-  })
+# Secret version - you need to set this manually
+resource "aws_secretsmanager_secret_version" "openai_api_key" {
+  secret_id     = aws_secretsmanager_secret.openai_api_key.id
+  secret_string = "PLACEHOLDER_SET_VIA_AWS_CLI"
+  
+  lifecycle {
+    ignore_changes = [secret_string]
+  }
 }
 
-resource "aws_iam_role_policy_attachment" "ecs_task_execution_role_policy" {
-  role       = aws_iam_role.ecs_task_execution_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
-}
-
-# Additional policy for secrets access
-resource "aws_iam_role_policy" "ecs_secrets_policy" {
-  name = "${var.app_name}-ecs-secrets-policy"
-  role = aws_iam_role.ecs_task_execution_role.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "secretsmanager:GetSecretValue"
-        ]
-        Resource = aws_secretsmanager_secret.openai_api_key.arn
-      }
-    ]
-  })
-}
 
 # Default VPC and Subnets
 data "aws_vpc" "default" {
@@ -217,139 +79,8 @@ data "aws_subnets" "default" {
   }
 }
 
-# Security Group for ECS
-resource "aws_security_group" "ecs_tasks" {
-  name        = "${var.app_name}-ecs-tasks"
-  description = "Security group for ECS tasks"
-  vpc_id      = data.aws_vpc.default.id
 
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
 
-  tags = {
-    Name = "${var.app_name}-ecs-tasks-sg"
-  }
-}
-
-# Application Load Balancer
-resource "aws_lb" "main" {
-  name               = "${var.app_name}-alb"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb.id]
-  subnets            = data.aws_subnets.default.ids
-
-  enable_deletion_protection = false
-
-  tags = {
-    Name = "${var.app_name}-alb"
-  }
-}
-
-# ALB Target Group
-resource "aws_lb_target_group" "app" {
-  name     = "${var.app_name}-tg"
-  port     = 3000
-  protocol = "HTTP"
-  vpc_id   = data.aws_vpc.default.id
-  target_type = "ip"
-
-  health_check {
-    enabled             = true
-    healthy_threshold   = 2
-    interval            = 30
-    matcher             = "200"
-    path                = "/health"
-    port                = "traffic-port"
-    protocol            = "HTTP"
-    timeout             = 5
-    unhealthy_threshold = 3
-  }
-
-  tags = {
-    Name = "${var.app_name}-tg"
-  }
-}
-
-# ALB Listener
-resource "aws_lb_listener" "app" {
-  load_balancer_arn = aws_lb.main.arn
-  port              = "80"
-  protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.app.arn
-  }
-}
-
-# ALB Security Group
-resource "aws_security_group" "alb" {
-  name        = "${var.app_name}-alb-sg"
-  description = "Security group for ALB"
-  vpc_id      = data.aws_vpc.default.id
-
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "${var.app_name}-alb-sg"
-  }
-}
-
-# Update ECS tasks security group to allow ALB access
-resource "aws_security_group_rule" "ecs_from_alb" {
-  type                     = "ingress"
-  from_port                = 3000
-  to_port                  = 3000
-  protocol                 = "tcp"
-  source_security_group_id = aws_security_group.alb.id
-  security_group_id        = aws_security_group.ecs_tasks.id
-}
-
-# ECS Service
-resource "aws_ecs_service" "main" {
-  name            = var.app_name
-  cluster         = aws_ecs_cluster.main.id
-  task_definition = aws_ecs_task_definition.app.arn
-  desired_count   = 1
-  launch_type     = "FARGATE"
-
-  network_configuration {
-    subnets          = data.aws_subnets.default.ids
-    security_groups  = [aws_security_group.ecs_tasks.id]
-    assign_public_ip = true
-  }
-
-  load_balancer {
-    target_group_arn = aws_lb_target_group.app.arn
-    container_name   = var.app_name
-    container_port   = 3000
-  }
-
-  deployment_minimum_healthy_percent = 100
-  deployment_maximum_percent         = 200
-
-  depends_on = [
-    aws_iam_role_policy_attachment.ecs_task_execution_role_policy,
-    aws_lb_listener.app
-  ]
-}
 
 # GitHub OIDC Identity Provider
 resource "aws_iam_openid_connect_provider" "github" {
@@ -398,37 +129,6 @@ resource "aws_iam_role_policy" "github_actions_policy" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "ecr:GetAuthorizationToken",
-          "ecr:BatchCheckLayerAvailability",
-          "ecr:GetDownloadUrlForLayer",
-          "ecr:BatchGetImage",
-          "ecr:PutImage",
-          "ecr:InitiateLayerUpload",
-          "ecr:UploadLayerPart",
-          "ecr:CompleteLayerUpload"
-        ]
-        Resource = "*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "ecs:UpdateService",
-          "ecs:DescribeServices",
-          "ecs:DescribeTaskDefinition",
-          "ecs:RegisterTaskDefinition"
-        ]
-        Resource = "*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "iam:PassRole"
-        ]
-        Resource = aws_iam_role.ecs_task_execution_role.arn
-      },
       {
         Effect = "Allow"
         Action = [
@@ -592,18 +292,6 @@ resource "aws_cloudfront_distribution" "frontend" {
     origin_id                = "S3-${aws_s3_bucket.frontend.bucket}"
   }
 
-  # ALB origin for API calls
-  origin {
-    domain_name = aws_lb.main.dns_name
-    origin_id   = "ALB-${var.app_name}-api"
-
-    custom_origin_config {
-      http_port              = 80
-      https_port             = 443
-      origin_protocol_policy = "http-only"
-      origin_ssl_protocols   = ["TLSv1.2"]
-    }
-  }
 
   # Lambda origin for API calls
   origin {
@@ -624,7 +312,7 @@ resource "aws_cloudfront_distribution" "frontend" {
   default_root_object = "index.html"
   comment             = "${var.app_name} frontend distribution"
   
-  aliases = [var.domain_name]
+  aliases = [var.domain_name, "www.${var.domain_name}"]
 
   # Default cache behavior for frontend assets
   default_cache_behavior {
@@ -648,9 +336,9 @@ resource "aws_cloudfront_distribution" "frontend" {
     max_ttl     = 86400  # 24 hours
   }
 
-  # API cache behavior - Lambda routing with header
+  # API cache behavior - Lambda
   ordered_cache_behavior {
-    path_pattern           = "/api/lambda/*"
+    path_pattern           = "/api/*"
     allowed_methods        = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
     cached_methods         = ["GET", "HEAD", "OPTIONS"]
     target_origin_id       = "LAMBDA-${var.app_name}-api"
@@ -671,93 +359,9 @@ resource "aws_cloudfront_distribution" "frontend" {
     max_ttl     = 0
   }
 
-  # API cache behavior - ECS (default)
-  ordered_cache_behavior {
-    path_pattern           = "/api/*"
-    allowed_methods        = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
-    cached_methods         = ["GET", "HEAD", "OPTIONS"]
-    target_origin_id       = "ALB-${var.app_name}-api"
-    compress               = true
-    viewer_protocol_policy = "redirect-to-https"
 
-    forwarded_values {
-      query_string = true
-      headers      = ["Origin", "Authorization", "Content-Type", "X-Requested-With", "Accept"]
 
-      cookies {
-        forward = "all"
-      }
-    }
 
-    min_ttl     = 0
-    default_ttl = 0  # Don't cache API responses
-    max_ttl     = 0
-  }
-
-  # Health check cache behavior
-  ordered_cache_behavior {
-    path_pattern           = "/health"
-    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
-    cached_methods         = ["GET", "HEAD"]
-    target_origin_id       = "ALB-${var.app_name}-api"
-    compress               = true
-    viewer_protocol_policy = "redirect-to-https"
-
-    forwarded_values {
-      query_string = false
-      cookies {
-        forward = "none"
-      }
-    }
-
-    min_ttl     = 0
-    default_ttl = 60   # Cache health checks for 1 minute
-    max_ttl     = 300  # Max 5 minutes
-  }
-
-  # Auth endpoints cache behavior
-  ordered_cache_behavior {
-    path_pattern           = "/auth/*"
-    allowed_methods        = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
-    cached_methods         = ["GET", "HEAD", "OPTIONS"]
-    target_origin_id       = "ALB-${var.app_name}-api"
-    compress               = true
-    viewer_protocol_policy = "redirect-to-https"
-
-    forwarded_values {
-      query_string = true
-      headers      = ["Origin", "Authorization", "Content-Type", "X-Requested-With", "Accept"]
-
-      cookies {
-        forward = "all"
-      }
-    }
-
-    min_ttl     = 0
-    default_ttl = 0  # Don't cache auth responses
-    max_ttl     = 0
-  }
-
-  # Metrics endpoints cache behavior
-  ordered_cache_behavior {
-    path_pattern           = "/metrics"
-    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
-    cached_methods         = ["GET", "HEAD"]
-    target_origin_id       = "ALB-${var.app_name}-api"
-    compress               = true
-    viewer_protocol_policy = "redirect-to-https"
-
-    forwarded_values {
-      query_string = false
-      cookies {
-        forward = "none"
-      }
-    }
-
-    min_ttl     = 0
-    default_ttl = 60   # Cache metrics for 1 minute
-    max_ttl     = 300  # Max 5 minutes
-  }
 
   # SPA routing - custom error response
   custom_error_response {
@@ -796,8 +400,7 @@ resource "aws_cloudfront_distribution" "frontend" {
   }
 
   depends_on = [
-    aws_s3_bucket.frontend,
-    aws_lb.main
+    aws_s3_bucket.frontend
   ]
 }
 
@@ -855,6 +458,34 @@ resource "aws_route53_record" "root_domain_ipv6" {
   }
 }
 
+# Route 53 A record for www subdomain
+resource "aws_route53_record" "www_domain" {
+  zone_id = data.aws_route53_zone.main.zone_id
+  name    = "www.${var.domain_name}"
+  type    = "A"
+  allow_overwrite = true
+
+  alias {
+    name                   = aws_cloudfront_distribution.frontend.domain_name
+    zone_id                = aws_cloudfront_distribution.frontend.hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+# Route 53 AAAA record for www subdomain IPv6
+resource "aws_route53_record" "www_domain_ipv6" {
+  zone_id = data.aws_route53_zone.main.zone_id
+  name    = "www.${var.domain_name}"
+  type    = "AAAA"
+  allow_overwrite = true
+
+  alias {
+    name                   = aws_cloudfront_distribution.frontend.domain_name
+    zone_id                = aws_cloudfront_distribution.frontend.hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
 # S3 bucket website configuration
 resource "aws_s3_bucket_website_configuration" "frontend" {
   bucket = aws_s3_bucket.frontend.id
@@ -869,20 +500,6 @@ resource "aws_s3_bucket_website_configuration" "frontend" {
 }
 
 # Outputs
-output "ecr_repository_url" {
-  description = "ECR repository URL"
-  value       = aws_ecr_repository.app.repository_url
-}
-
-output "ecs_cluster_name" {
-  description = "ECS cluster name"
-  value       = aws_ecs_cluster.main.name
-}
-
-output "ecs_service_name" {
-  description = "ECS service name"
-  value       = aws_ecs_service.main.name
-}
 
 output "github_actions_role_arn" {
   description = "GitHub Actions role ARN"
@@ -894,10 +511,6 @@ output "openai_secret_arn" {
   value       = aws_secretsmanager_secret.openai_api_key.arn
 }
 
-output "alb_dns_name" {
-  description = "Application Load Balancer DNS name"
-  value       = aws_lb.main.dns_name
-}
 
 output "application_url" {
   description = "URL to access the application"
@@ -933,6 +546,7 @@ resource "aws_lambda_function" "backend_lambda" {
   environment {
     variables = {
       NODE_ENV = "production"
+      OPENAI_API_KEY = aws_secretsmanager_secret_version.openai_api_key.secret_string
     }
   }
 
@@ -950,6 +564,10 @@ resource "aws_lambda_function" "backend_lambda" {
 resource "aws_cloudwatch_log_group" "lambda" {
   name              = "/aws/lambda/${var.app_name}-backend-lambda"
   retention_in_days = 30
+
+  tags = {
+    Name = "${var.app_name}-lambda-logs"
+  }
 }
 
 # Lambda Execution Role
@@ -1062,10 +680,48 @@ resource "aws_api_gateway_deployment" "lambda_api" {
   ]
 
   rest_api_id = aws_api_gateway_rest_api.lambda_api.id
-  stage_name  = "prod"
+
+  # Trigger redeployment when API changes
+  triggers = {
+    redeployment = sha1(jsonencode([
+      aws_api_gateway_resource.lambda_proxy.id,
+      aws_api_gateway_method.lambda_proxy.id,
+      aws_api_gateway_method.lambda_root.id,
+      aws_api_gateway_integration.lambda_proxy.id,
+      aws_api_gateway_integration.lambda_root.id,
+    ]))
+  }
 
   lifecycle {
     create_before_destroy = true
+  }
+}
+
+# API Gateway Stage
+resource "aws_api_gateway_stage" "lambda_api" {
+  deployment_id = aws_api_gateway_deployment.lambda_api.id
+  rest_api_id   = aws_api_gateway_rest_api.lambda_api.id
+  stage_name    = "prod"
+  description   = "Production stage for ${var.app_name} Lambda API"
+
+  # CloudWatch logging disabled - requires API Gateway account settings
+
+  # Enable X-Ray tracing
+  xray_tracing_enabled = true
+
+  tags = {
+    Name        = "${var.app_name}-lambda-api-stage"
+    Environment = "production"
+  }
+}
+
+# CloudWatch Log Group for API Gateway
+resource "aws_cloudwatch_log_group" "api_gateway" {
+  name              = "/aws/apigateway/${var.app_name}"
+  retention_in_days = 30
+
+  tags = {
+    Name = "${var.app_name}-api-gateway-logs"
   }
 }
 
@@ -1089,10 +745,10 @@ output "lambda_function_name" {
 
 output "lambda_api_gateway_url" {
   description = "API Gateway URL for Lambda backend"
-  value       = "${aws_api_gateway_rest_api.lambda_api.execution_arn}/prod"
+  value       = "${aws_api_gateway_rest_api.lambda_api.execution_arn}/${aws_api_gateway_stage.lambda_api.stage_name}"
 }
 
 output "lambda_api_gateway_invoke_url" {
   description = "API Gateway invoke URL for Lambda backend"
-  value       = "https://${aws_api_gateway_rest_api.lambda_api.id}.execute-api.${var.aws_region}.amazonaws.com/prod"
+  value       = "https://${aws_api_gateway_rest_api.lambda_api.id}.execute-api.${var.aws_region}.amazonaws.com/${aws_api_gateway_stage.lambda_api.stage_name}"
 }
