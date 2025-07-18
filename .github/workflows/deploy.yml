@@ -57,8 +57,8 @@ jobs:
   check-frontend-changes:
     runs-on: ubuntu-latest
     outputs:
-      frontend-changed: ${{ steps.changes.outputs.frontend }}
-      backend-changed: ${{ steps.changes.outputs.backend }}
+      frontend: ${{ steps.changes.outputs.frontend }}
+      backend: ${{ steps.changes.outputs.backend }}
     steps:
     - uses: actions/checkout@v4
     - uses: dorny/paths-filter@v3
@@ -77,7 +77,7 @@ jobs:
   deploy-frontend:
     needs: [test, check-frontend-changes]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.check-frontend-changes.outputs.frontend-changed == 'true'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.check-frontend-changes.outputs.frontend == 'true'
     
     steps:
     - uses: actions/checkout@v4
@@ -145,7 +145,7 @@ jobs:
   deploy-lambda:
     needs: [test, check-frontend-changes]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.check-frontend-changes.outputs.backend-changed == 'true'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.check-frontend-changes.outputs.backend == 'true'
     
     steps:
     - uses: actions/checkout@v4
