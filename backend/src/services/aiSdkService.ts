@@ -2,6 +2,7 @@ import { generateText } from 'ai';
 import { openai } from '@ai-sdk/openai';
 import { anthropic } from '@ai-sdk/anthropic';
 import { validateGitDiff } from '../utils/validation';
+import { getOpenAIApiKey } from '../utils/secrets';
 
 export interface CommitMessageResponse {
   commitMessage: string;
@@ -31,6 +32,7 @@ export class AISDKService {
   private maxTokens: number;
   private openaiApiKey?: string;
   private anthropicApiKey?: string;
+  private initialized = false;
 
   constructor(options: AISDKServiceOptions = {}) {
     this.provider = options.provider || 'openai';
@@ -44,21 +46,45 @@ export class AISDKService {
     // Set default models based on provider
     if (this.provider === 'openai') {
       this.model = options.model || 'gpt-4o-mini';
-      if (!this.openaiApiKey) {
-        throw new Error('OpenAI API key is required. Set OPENAI_API_KEY environment variable or pass openaiApiKey in options.');
-      }
     } else if (this.provider === 'anthropic') {
       this.model = options.model || 'claude-3-haiku-20240307';
-      if (!this.anthropicApiKey) {
-        throw new Error('Anthropic API key is required. Set ANTHROPIC_API_KEY environment variable or pass anthropicApiKey in options.');
-      }
     } else {
       // Default fallback
       this.model = options.model || 'gpt-4o-mini';
     }
   }
 
+  private async ensureInitialized(): Promise<void> {
+    if (this.initialized) {
+      return;
+    }
+
+    // Get API keys from AWS Secrets Manager if not provided and in production
+    if (this.provider === 'openai' && !this.openaiApiKey) {
+      try {
+        this.openaiApiKey = await getOpenAIApiKey();
+      } catch (error) {
+        throw new Error('OpenAI API key is required. Set OPENAI_API_KEY environment variable or configure AWS Secrets Manager.');
+      }
+    } else if (this.provider === 'anthropic' && !this.anthropicApiKey) {
+      if (!process.env.ANTHROPIC_API_KEY) {
+        throw new Error('Anthropic API key is required. Set ANTHROPIC_API_KEY environment variable.');
+      }
+    }
+
+    // Validate that we have the required API keys
+    if (this.provider === 'openai' && !this.openaiApiKey) {
+      throw new Error('OpenAI API key is required. Set OPENAI_API_KEY environment variable or pass openaiApiKey in options.');
+    } else if (this.provider === 'anthropic' && !this.anthropicApiKey) {
+      throw new Error('Anthropic API key is required. Set ANTHROPIC_API_KEY environment variable or pass anthropicApiKey in options.');
+    }
+
+    this.initialized = true;
+  }
+
   async generateCommitMessage(gitDiff: string): Promise<CommitMessageResponse> {
+    await this.ensureInitialized();
+    
     // Validate git diff input
     const validation = validateGitDiff(gitDiff);
     if (!validation.isValid) {
@@ -174,6 +200,7 @@ Do not include any other text, explanations, or formatting. Start your response 
   // Health check method
   async healthCheck(): Promise<boolean> {
     try {
+      await this.ensureInitialized();
       const model = this.getModel();
       
       // Simple test generation

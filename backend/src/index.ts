@@ -17,6 +17,14 @@ import { validateCognitoConfig } from "./config/cognito";
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Trust proxy for Lambda/CloudFront deployment
+// Set trust proxy to 1 for Lambda environments to avoid rate limiting issues
+if (process.env.AWS_EXECUTION_ENV?.includes('Lambda')) {
+  app.set('trust proxy', 1);
+} else {
+  app.set('trust proxy', false);
+}
+
 // Initialize logging setup
 createLoggingSetup();
 
