@@ -556,7 +556,6 @@ resource "aws_lambda_function" "backend_lambda" {
   environment {
     variables = {
       NODE_ENV = "production"
-      OPENAI_API_KEY = aws_secretsmanager_secret_version.openai_api_key.secret_string
     }
   }
 

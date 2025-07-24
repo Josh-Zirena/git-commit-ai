@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { validateGitDiff } from '../utils/validation';
+import { getOpenAIApiKey } from '../utils/secrets';
 
 export interface CommitMessageResponse {
   commitMessage: string;
@@ -20,29 +21,37 @@ export interface OpenAIServiceOptions {
 }
 
 export class OpenAIService {
-  private client: OpenAI;
+  private client: OpenAI | null = null;
   private model: string;
   private temperature: number;
   private maxTokens: number;
+  private apiKey: string | null = null;
+  private timeout: number;
 
   constructor(options: OpenAIServiceOptions = {}) {
-    const apiKey = options.apiKey || process.env.OPENAI_API_KEY;
-    
-    if (!apiKey) {
-      throw new Error('OpenAI API key is required. Set OPENAI_API_KEY environment variable or pass apiKey in options.');
-    }
-
-    this.client = new OpenAI({
-      apiKey,
-      timeout: options.timeout || 30000,
-    });
-
     this.model = options.model || 'gpt-4o-mini';
+    this.timeout = options.timeout || 30000;
+    this.apiKey = options.apiKey || null;
     this.temperature = options.temperature || 0.1;
     this.maxTokens = options.maxTokens || 150;
   }
 
+  private async ensureInitialized(): Promise<void> {
+    if (this.client) {
+      return;
+    }
+
+    const apiKey = this.apiKey || await getOpenAIApiKey();
+    
+    this.client = new OpenAI({
+      apiKey,
+      timeout: this.timeout,
+    });
+  }
+
   async generateCommitMessage(gitDiff: string): Promise<CommitMessageResponse> {
+    await this.ensureInitialized();
+    
     // Validate git diff input
     const validation = validateGitDiff(gitDiff);
     if (!validation.isValid) {
@@ -52,6 +61,10 @@ export class OpenAIService {
     const prompt = this.buildPrompt(gitDiff);
 
     try {
+      if (!this.client) {
+        throw new Error('OpenAI client not initialized');
+      }
+      
       const response = await this.client.chat.completions.create({
         model: this.model,
         messages: [
@@ -153,6 +166,10 @@ Do not include any other text, explanations, or formatting. Start your response 
   // Health check method
   async healthCheck(): Promise<boolean> {
     try {
+      await this.ensureInitialized();
+      if (!this.client) {
+        return false;
+      }
       await this.client.models.list();
       return true;
     } catch (error) {

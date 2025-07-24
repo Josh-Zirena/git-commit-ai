@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import { DiffProcessor, ProcessedDiff } from '../utils/diffProcessor';
 import { validateGitDiff } from '../utils/validation';
+import { getOpenAIApiKey } from '../utils/secrets';
 
 export interface EnhancedCommitMessageResponse {
   commitMessage: string;
@@ -35,27 +36,20 @@ export interface EnhancedOpenAIServiceOptions {
 }
 
 export class EnhancedOpenAIService {
-  private client: OpenAI;
+  private client: OpenAI | null = null;
   private model: string;
   private temperature: number;
   private maxTokens: number;
   private diffProcessor: DiffProcessor;
   private maxDirectSize: number;
   private enableSummarization: boolean;
+  private apiKey: string | null = null;
+  private timeout: number;
 
   constructor(options: EnhancedOpenAIServiceOptions = {}) {
-    const apiKey = options.apiKey || process.env.OPENAI_API_KEY;
-    
-    if (!apiKey) {
-      throw new Error('OpenAI API key is required. Set OPENAI_API_KEY environment variable or pass apiKey in options.');
-    }
-
-    this.client = new OpenAI({
-      apiKey,
-      timeout: options.timeout || 60000, // Increased timeout for large diffs
-    });
-
     this.model = options.model || 'gpt-4o-mini';
+    this.timeout = options.timeout || 60000; // Increased timeout for large diffs
+    this.apiKey = options.apiKey || null;
     this.temperature = options.temperature || 0.1;
     this.maxTokens = options.maxTokens || 200;
     this.maxDirectSize = options.maxDirectSize || 100 * 1024; // 100KB
@@ -68,7 +62,22 @@ export class EnhancedOpenAIService {
     });
   }
 
+  private async ensureInitialized(): Promise<void> {
+    if (this.client) {
+      return;
+    }
+
+    const apiKey = this.apiKey || await getOpenAIApiKey();
+    
+    this.client = new OpenAI({
+      apiKey,
+      timeout: this.timeout,
+    });
+  }
+
   async generateCommitMessage(gitDiff: string): Promise<EnhancedCommitMessageResponse> {
+    await this.ensureInitialized();
+    
     // Initial validation
     const validation = validateGitDiff(gitDiff, { 
       maxSize: 10 * 1024 * 1024, // Allow up to 10MB for processing
@@ -108,6 +117,10 @@ export class EnhancedOpenAIService {
     const prompt = this.createPrompt(processedDiff, processingStrategy, processedInfo);
     
     try {
+      if (!this.client) {
+        throw new Error('OpenAI client not initialized');
+      }
+      
       const completion = await this.client.chat.completions.create({
         model: this.model,
         messages: [
