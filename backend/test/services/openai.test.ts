@@ -5,6 +5,15 @@ import OpenAI from 'openai';
 jest.mock('openai');
 const MockedOpenAI = OpenAI as jest.MockedClass<typeof OpenAI>;
 
+// Mock secrets utility
+jest.mock('../../src/utils/secrets', () => ({
+  getOpenAIApiKey: jest.fn(),
+  clearApiKeyCache: jest.fn(),
+}));
+
+import { getOpenAIApiKey } from '../../src/utils/secrets';
+const mockGetOpenAIApiKey = getOpenAIApiKey as jest.MockedFunction<typeof getOpenAIApiKey>;
+
 describe('OpenAIService', () => {
   let service: OpenAIService;
   let mockClient: jest.Mocked<OpenAI>;
@@ -48,11 +57,11 @@ index 1234567..abcdefg 100644
   });
 
   describe('constructor', () => {
-    it('should create OpenAI service with default options', () => {
-      expect(MockedOpenAI).toHaveBeenCalledWith({
-        apiKey: 'test-key',
-        timeout: 30000,
-      });
+    it('should create OpenAI service without immediate initialization', () => {
+      const newService = new OpenAIService({ apiKey: 'test-key' });
+      expect(newService).toBeDefined();
+      // OpenAI client should not be created until first method call
+      expect(MockedOpenAI).not.toHaveBeenCalled();
     });
 
     it('should create OpenAI service with custom options', () => {
@@ -63,28 +72,35 @@ index 1234567..abcdefg 100644
         maxTokens: 200,
         timeout: 60000,
       });
-
-      expect(MockedOpenAI).toHaveBeenCalledWith({
-        apiKey: 'custom-key',
-        timeout: 60000,
-      });
+      expect(customService).toBeDefined();
+      // OpenAI client should not be created until first method call
+      expect(MockedOpenAI).not.toHaveBeenCalled();
     });
 
-    it('should throw error if no API key provided', () => {
+    it('should handle no API key during construction', () => {
       delete process.env.OPENAI_API_KEY;
       
+      // Constructor should not throw - error happens on first method call
       expect(() => {
         new OpenAIService();
-      }).toThrow('OpenAI API key is required');
+      }).not.toThrow();
     });
 
-    it('should use environment variable if no API key in options', () => {
-      process.env.OPENAI_API_KEY = 'env-key';
+    it('should initialize OpenAI client on first method call', async () => {
+      delete process.env.OPENAI_API_KEY; // Clear env var to test secrets manager fallback
+      mockGetOpenAIApiKey.mockResolvedValue('secrets-key');
+      const newService = new OpenAIService();
       
-      new OpenAIService();
+      // Mock successful response
+      mockCreate.mockResolvedValue({
+        choices: [{ message: { content: 'COMMIT: test\nDESCRIPTION: test' } }],
+        usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 }
+      });
+      
+      await newService.generateCommitMessage(validGitDiff);
       
       expect(MockedOpenAI).toHaveBeenCalledWith({
-        apiKey: 'env-key',
+        apiKey: 'secrets-key',
         timeout: 30000,
       });
     });
